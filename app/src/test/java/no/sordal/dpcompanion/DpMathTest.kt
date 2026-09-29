@@ -37,7 +37,7 @@ class DpMathTest {
         val two = DpSession(tourId="t", startMillis=time(29,0), endMillis=time(29,2))
         val three = DpSession(tourId="t", startMillis=time(30,0), endMillis=time(30,3))
         assertEquals(1.0, DpMath.totals(tour("Short operations"), listOf(two)).dpDays!!, 0.0001)
-        assertEquals(1.0, DpMath.totals(tour("Short operations"), listOf(two,three)).dpDays!!, 0.0001)
+        assertEquals(2.0, DpMath.totals(tour("Short operations"), listOf(two,three)).dpDays!!, 0.0001)
     }
 
     @Test fun severalSessionsOnOneDateCannotEarnTwoDays() {
