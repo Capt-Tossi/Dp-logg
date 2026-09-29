@@ -191,7 +191,7 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
                     val session = DpSession(tourId = tour.id, startMillis = now - 3_600_000, endMillis = now)
                     save(data.copy(sessions = data.sessions + session)); editId = session.id
                 }, onTours = { page = 1 }, onDelete = { deleteSessionId = it })
-                1 -> ToursScreen(data, save, onPhoto = { owner -> takePhoto(owner, "DP checklist") }, onOpenPhoto = { openPhoto(context, it) }, onVessels = { page = 2 })
+                1 -> ToursScreen(data, save, onPhoto = { owner -> takePhoto(owner, "Service checklist") }, onOpenPhoto = { openPhoto(context, it) }, onVessels = { page = 2 })
                 2 -> VesselsScreen(data, save, onPhoto = { owner -> takePhoto(owner, "Vessel photo") }, onOpenPhoto = { openPhoto(context, it) })
                 3 -> when (meSection) {
                     1 -> CertificateScreen(data, save, onPhoto = { takePhoto("certificate", "DP certificate") }, onOpenPhoto = { openPhoto(context, it) }, onClose = { meSection = 0 })
@@ -428,7 +428,21 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
     val tour = data.tours.firstOrNull { it.id == data.activeTourId }
     var chosenId by remember { mutableStateOf("") }
     var vesselMenu by remember { mutableStateOf(false) }
+    var editingAttachmentId by remember { mutableStateOf<String?>(null) }
+    var attachmentLabel by remember { mutableStateOf("") }
     val chosen = data.vessels.firstOrNull { it.id == chosenId }
+    if (editingAttachmentId != null) AlertDialog(
+        onDismissRequest = { editingAttachmentId = null },
+        title = { Text("Edit photo label") },
+        text = { OutlinedTextField(attachmentLabel, { attachmentLabel = it }, label = { Text("Document type") }, singleLine = true) },
+        confirmButton = { TextButton(onClick = {
+            val id = editingAttachmentId
+            val label = attachmentLabel.trim()
+            if (id != null && label.isNotBlank()) save(data.copy(attachments = data.attachments.map { if (it.id == id) it.copy(category = label) else it }))
+            editingAttachmentId = null
+        }, enabled = attachmentLabel.isNotBlank()) { Text("Save") } },
+        dismissButton = { TextButton(onClick = { editingAttachmentId = null }) { Text("Cancel") } }
+    )
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Sea Service", style = MaterialTheme.typography.headlineSmall)
         if (data.vessels.isEmpty()) {
@@ -478,7 +492,12 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
             if (totals.provisional) Text("Provisional until disembarked date is entered", style = MaterialTheme.typography.bodySmall)
             if (totals.issue != null) Text(totals.issue, color = MaterialTheme.colorScheme.error)
             OutlinedButton(onClick = { onPhoto(tour.id) }) { Text("Photo service checklist") }
-            data.attachments.filter { it.ownerId == tour.id }.forEach { a -> TextButton(onClick = { onOpenPhoto(a.fileName) }) { Text(a.category) } }
+            data.attachments.filter { it.ownerId == tour.id }.forEachIndexed { index, a ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { onOpenPhoto(a.fileName) }, modifier = Modifier.weight(1f)) { Text("Photo ${index + 1}: ${a.category}", maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
+                    TextButton(onClick = { editingAttachmentId = a.id; attachmentLabel = a.category }) { Text("Edit label") }
+                }
+            }
         }
     }
 }
