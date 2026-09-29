@@ -21,6 +21,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -459,7 +460,7 @@ private fun WatchHoursField(tour: Tour, onSave: (Double) -> Unit) {
         singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { commit() }),
         modifier = Modifier.fillMaxWidth().onFocusChanged { state ->
-            if (hadFocus && !state.isFocused && draft.isNotBlank()) { hadFocus = false; commit() }
+            if (hadFocus && !state.isFocused) { hadFocus = false; commit() }
             hadFocus = state.isFocused
         })
 }
@@ -584,6 +585,8 @@ private fun VesselsScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (Stri
 private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String) -> Unit, onOpenPhoto: (String) -> Unit,
                         onReplacePhoto: (Attachment) -> Unit, onDeletePhoto: (Attachment) -> Unit, onVessels: () -> Unit) {
     val context = LocalContext.current
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     val tour = data.tours.firstOrNull { it.id == data.activeTourId }
     var chosenId by remember { mutableStateOf("") }
     var vesselMenu by remember { mutableStateOf(false) }
@@ -602,7 +605,8 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
         }, enabled = attachmentLabel.isNotBlank()) { Text("Save") } },
         dismissButton = { TextButton(onClick = { editingAttachmentId = null }) { Text("Cancel") } }
     )
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { focus.clearFocus(); keyboard?.hide() }) }
+        .verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Sea Service", style = MaterialTheme.typography.headlineSmall)
         if (data.vessels.isEmpty()) {
             Text("Add a vessel before creating a service period.")
