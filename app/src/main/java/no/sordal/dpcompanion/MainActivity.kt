@@ -280,7 +280,14 @@ private fun VesselThumbnail(data: AppData, vesselId: String, size: Int = 90) {
     val context = LocalContext.current
     val attachment = data.attachments.filter { it.ownerId == vesselId && it.category == "Vessel photo" }.maxByOrNull { it.createdAtMillis }
     val bitmap = remember(attachment?.fileName) {
-        attachment?.let { a -> runCatching { BitmapFactory.decodeFile(File(File(context.filesDir, "photos"), a.fileName).absolutePath)?.asImageBitmap() }.getOrNull() }
+        attachment?.let { a -> runCatching {
+            val path = File(File(context.filesDir, "photos"), a.fileName).absolutePath
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(path, bounds)
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 512) sample *= 2
+            BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
+        }.getOrNull() }
     }
     if (bitmap != null) Image(bitmap, contentDescription = "Vessel photo", contentScale = ContentScale.Crop,
         modifier = Modifier.size(size.dp))
