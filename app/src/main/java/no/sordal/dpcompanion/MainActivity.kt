@@ -380,10 +380,9 @@ private fun HomeScreen(data: AppData, showAll: Boolean, onShowAll: (Boolean) -> 
         Text("${totals.loggedHours} logged DP hours  ·  ${totals.dpDays?.formatDays() ?: if (totals.loggedHours == 0) "0" else "—"} DP days", style = MaterialTheme.typography.titleMedium)
         if (totals.provisional) Text("Provisional total until disembark date is entered", style = MaterialTheme.typography.bodySmall)
         if (totals.issue != null) Text(totals.issue, color = MaterialTheme.colorScheme.error)
-        Spacer(Modifier.height(30.dp))
         val displayedActive = active ?: pendingStop
         val showingStop = displayedActive != null && transitioning != "start"
-        Box(Modifier.fillMaxWidth().height(68.dp), contentAlignment = Alignment.CenterStart) {
+        Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.CenterStart) {
             if (showingStop) Column {
                 Text("Recording since ${formatStamp(displayedActive!!.startMillis, tour.zoneId)}",
                     style = MaterialTheme.typography.titleMedium)
