@@ -19,7 +19,8 @@ data class Tour(
 
 data class Vessel(
     val id: String = UUID.randomUUID().toString(),
-    val name: String = "", val imo: String = "", val type: String = "PSV", val dpClass: String = "DP2"
+    val name: String = "", val imo: String = "", val type: String = "PSV", val dpClass: String = "DP2",
+    val dpSystem: String = "", val grossTonnage: String = ""
 )
 
 data class DpSession(
@@ -37,7 +38,7 @@ data class AppData(
     val tours: List<Tour> = emptyList(), val sessions: List<DpSession> = emptyList(),
     val cpd: List<CpdEntry> = emptyList(), val attachments: List<Attachment> = emptyList(),
     val activeTourId: String? = null, val certificateNumber: String = "", val certificateExpiry: String = "",
-    val cpd6Completed: Boolean = true,
+    val cpd6Completed: Boolean = false,
     val vessels: List<Vessel> = emptyList(), val fullName: String = "", val lastName: String = "",
     val preferredRank: String = "Master", val preferredCapacity: String = "Senior DPO / DP Master",
     val certificateIssue: String = ""

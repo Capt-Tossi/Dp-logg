@@ -97,12 +97,13 @@ class Store(private val context: Context) {
     }
 
     private fun encode(data: AppData) = JSONObject().apply {
-        put("schema", 2); put("activeTourId", data.activeTourId); put("certificateNumber", data.certificateNumber)
+        put("schema", 3); put("activeTourId", data.activeTourId); put("certificateNumber", data.certificateNumber)
         put("certificateExpiry", data.certificateExpiry); put("certificateIssue", data.certificateIssue)
         put("cpd6Completed", data.cpd6Completed); put("fullName", data.fullName); put("lastName", data.lastName)
         put("preferredRank", data.preferredRank); put("preferredCapacity", data.preferredCapacity)
         put("vessels", JSONArray().apply { data.vessels.forEach { v -> put(JSONObject().apply {
             put("id",v.id); put("name",v.name); put("imo",v.imo); put("type",v.type); put("dpClass",v.dpClass)
+            put("dpSystem",v.dpSystem); put("grossTonnage",v.grossTonnage)
         }) } })
         put("tours", JSONArray().apply { data.tours.forEach { t -> put(JSONObject().apply {
             put("id",t.id); put("vessel",t.vessel); put("imo",t.imo); put("vesselType",t.vesselType)
@@ -129,10 +130,11 @@ class Store(private val context: Context) {
     }
 
     private fun decode(j: JSONObject): AppData {
-        if (j.optInt("schema", 1) !in 1..2) error("Unsupported backup format")
+        if (j.optInt("schema", 1) !in 1..3) error("Unsupported backup format")
         val vessels = j.optJSONArray("vessels").objects().map { v -> Vessel(
             id=v.optString("id"), name=v.optString("name"), imo=v.optString("imo"),
-            type=v.optString("type","PSV"), dpClass=v.optString("dpClass","DP2")
+            type=v.optString("type","PSV"), dpClass=v.optString("dpClass","DP2"),
+            dpSystem=v.optString("dpSystem"), grossTonnage=v.optString("grossTonnage")
         ) }
         val tours = j.optJSONArray("tours").objects().map { t -> Tour(
             id=t.optString("id"), vessel=t.optString("vessel"), imo=t.optString("imo"),
@@ -161,7 +163,7 @@ class Store(private val context: Context) {
         val activeTourId = if (j.isNull("activeTourId")) null else j.optString("activeTourId").ifBlank { null }
         return AppData(tours=tours,sessions=sessions,cpd=cpd,attachments=attachments,activeTourId=activeTourId,
             certificateNumber=j.optString("certificateNumber"),certificateExpiry=j.optString("certificateExpiry"),
-            cpd6Completed=j.optBoolean("cpd6Completed",true),vessels=vessels,
+            cpd6Completed=j.optBoolean("cpd6Completed",false),vessels=vessels,
             fullName=j.optString("fullName"),lastName=j.optString("lastName"),
             preferredRank=j.optString("preferredRank","Master"),
             preferredCapacity=j.optString("preferredCapacity","Senior DPO / DP Master"),
