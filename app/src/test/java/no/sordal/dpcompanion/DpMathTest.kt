@@ -33,10 +33,10 @@ class DpMathTest {
         assertEquals(28.0, total.dpDays!!, 0.0001)
     }
 
-    @Test fun shortOperationsRequireMoreThanTwoHoursOnEachDate() {
+    @Test fun normalOperationsRequireAtLeastTwoHoursOnEachDate() {
         val two = DpSession(tourId="t", startMillis=time(29,0), endMillis=time(29,2))
         val three = DpSession(tourId="t", startMillis=time(30,0), endMillis=time(30,3))
-        assertEquals(0.0, DpMath.totals(tour("Short operations"), listOf(two)).dpDays!!, 0.0001)
+        assertEquals(1.0, DpMath.totals(tour("Short operations"), listOf(two)).dpDays!!, 0.0001)
         assertEquals(1.0, DpMath.totals(tour("Short operations"), listOf(two,three)).dpDays!!, 0.0001)
     }
 
@@ -63,9 +63,9 @@ class DpMathTest {
         assertEquals(1.0,DpMath.totals(tour("Short operations"),listOf(a,b)).dpDays!!,0.0001)
     }
 
-    @Test fun missingDutyPeriodDoesNotProduceInventedDays() {
+    @Test fun watchPeriodDoesNotChangeImcaHoursBasis() {
         val s=DpSession(tourId="t",startMillis=time(29,0),endMillis=time(29,20))
-        assertNull(DpMath.totals(tour("Continuous DP",duty=0.0),listOf(s)).dpDays)
+        assertEquals(10.0,DpMath.totals(tour("Continuous DP",duty=6.0),listOf(s)).dpDays!!,0.0001)
     }
 
     @Test fun overlappingSessionsAreFlaggedInsteadOfDoubleCounted() {

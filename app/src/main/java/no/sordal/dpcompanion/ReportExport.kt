@@ -8,7 +8,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-data class LetterDetails(val company: String, val dateOfBirth: String, val grossTonnage: String)
+data class LetterDetails(val company: String, val companyAddress: String, val dateOfBirth: String, val grossTonnage: String)
 
 object ReportExport {
     private val date = DateTimeFormatter.ofPattern("dd MMM yyyy", java.util.Locale.ENGLISH)
@@ -25,6 +25,7 @@ object ReportExport {
             result += "DRAFT — FOR COMPANY REVIEW AND SIGNATURE"
             result += "DP SEA TIME CONFIRMATION LETTER"
             result += "${details.company}  |  ${pretty(LocalDate.now().toString())}"
+            result += details.companyAddress
             result += "To: DP Department, The Nautical Institute"
             result += "Applicant: ${data.fullName}  |  Date of birth: ${pretty(details.dateOfBirth)}"
             result += "Certificate number: ${data.certificateNumber.ifBlank { "—" }}"
@@ -42,10 +43,10 @@ object ReportExport {
             result += "Signed on: ${pretty(tour.signedOn)}  |  Disembarked: ${pretty(tour.disembarked)}"
             result += "Rank: ${tour.rank}  |  DP capacity: ${tour.capacity}"
             result += "DP mode: ${if (tour.mode == "Continuous DP") "Continuous" else "Normal"}"
-            if (tour.mode == "Continuous DP") result += "Watch period: ${tour.dutyHours} hours"
+            if (tour.mode == "Continuous DP" && tour.dutyHours > 0) result += "Watch period: ${tour.dutyHours} hours (reference only)"
             result += "Logged DP hours: ${totals.loggedHours}  |  DP days: ${totals.dpDays?.let { "%.2f".format(java.util.Locale.US, it) } ?: "—"}  |  Days on board: ${totals.daysOnBoard ?: "—"}"
             if (layout == ReportLayout.NEW_SCHEME) {
-                result += "Active dates on DP (more than 2 hours on each date):"
+                result += "Active dates on DP (minimum 2 hours on each date):"
                 val days = ReportReview.activeDates(tour, sessions)
                 result += if (days.isEmpty()) "—" else days.joinToString(", ") { pretty(it.toString()) }
             }

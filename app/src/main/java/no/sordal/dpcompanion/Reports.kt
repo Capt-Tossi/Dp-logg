@@ -42,7 +42,6 @@ object ReportReview {
         }.toMutableList()
         if (tour.signedOn.isBlank()) findings += ReviewFinding(null, "Signed-on date missing")
         if (tour.disembarked.isBlank()) findings += ReviewFinding(null, "Disembarked date missing; totals are provisional")
-        if (tour.mode == "Continuous DP" && tour.dutyHours <= 0) findings += ReviewFinding(null, "Watch period hours missing")
         val totals = DpMath.totals(tour, own)
         if (totals.issue != null && findings.none { it.description == totals.issue }) findings += ReviewFinding(null, totals.issue)
         return findings
@@ -62,7 +61,7 @@ object ReportReview {
                 cursor = next
             }
         }
-        return millisByDate.filterValues { it > 2L * 60 * 60 * 1000 }.keys.sorted()
+        return millisByDate.filterValues { it >= 2L * 60 * 60 * 1000 }.keys.sorted()
     }
 }
 

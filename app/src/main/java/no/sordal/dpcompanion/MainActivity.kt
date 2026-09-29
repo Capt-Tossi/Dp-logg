@@ -70,7 +70,7 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
     var message by remember { mutableStateOf("") }
     var reportChoice by remember { mutableStateOf(ReportLayout.SUMMARY) }
     var reportTours by remember { mutableStateOf(emptyList<Tour>()) }
-    var reportDetails by remember { mutableStateOf(LetterDetails("", "", "")) }
+    var reportDetails by remember { mutableStateOf(LetterDetails("", "", "", "")) }
     var pendingOwner by rememberSaveable { mutableStateOf("") }
     var pendingCategory by rememberSaveable { mutableStateOf("") }
     var pendingFile by rememberSaveable { mutableStateOf("") }
@@ -477,6 +477,7 @@ private fun ExportScreen(data: AppData, onClose: () -> Unit,
     var selectedId by remember { mutableStateOf("") }
     var layout by remember { mutableStateOf(ReportLayout.SUMMARY) }
     var company by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
     var dob by remember { mutableStateOf("") }
     var grt by remember { mutableStateOf("") }
     val selected = choices.firstOrNull { it.vesselId == selectedId }
@@ -498,6 +499,7 @@ private fun ExportScreen(data: AppData, onClose: () -> Unit,
             if (letter) {
                 Text("Draft for employer verification. The company must check the figures and sign the letter.")
                 OutlinedTextField(company, { company = it }, label = { Text("Company name") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(address, { address = it }, label = { Text("Company address") }, modifier = Modifier.fillMaxWidth())
                 OutlinedButton(onClick = { pickDate(context, dob) { dob = it } }) { Text("Date of birth: ${dob.ifBlank { "Choose date" }}") }
                 OutlinedTextField(grt, { grt = it }, label = { Text("Vessel gross tonnage (GT)") }, modifier = Modifier.fillMaxWidth())
             }
@@ -511,7 +513,7 @@ private fun ExportScreen(data: AppData, onClose: () -> Unit,
                 }
             }
             if (issues.isNotEmpty()) issues.forEach { Text("! $it", color = MaterialTheme.colorScheme.error) }
-            Button(onClick = { onPdf(tours, layout, LetterDetails(company,dob,grt)) }, enabled = !letter || issues.isEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Save PDF") }
+            Button(onClick = { onPdf(tours, layout, LetterDetails(company,address,dob,grt)) }, enabled = !letter || issues.isEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Save PDF") }
             if (!letter) OutlinedButton(onClick = { onCsv(tours) }, modifier = Modifier.fillMaxWidth()) { Text("Save session CSV") }
         } else Text("Choose a vessel to preview its service periods.")
     }

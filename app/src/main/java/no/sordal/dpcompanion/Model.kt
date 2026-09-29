@@ -96,10 +96,9 @@ object DpMath {
         if (sorted.zipWithNext().any { (a, b) -> a.endMillis!! > b.startMillis })
             return TourTotals(hours, null, days, "Overlapping DP sessions need review")
         if (tour.mode == "Continuous DP") {
-            if (tour.dutyHours <= 0.0) return TourTotals(hours, null, days, "Set duty period")
-            return TourTotals(hours, (hours / tour.dutyHours).coerceAtMost(days.toDouble()), days, null, provisional)
+            return TourTotals(hours, (hours / 2.0).coerceAtMost(days.toDouble()), days, null, provisional)
         }
-        // Sum elapsed time on each calendar date before applying the >2 h short-operation rule.
+        // Sum elapsed time on each calendar date before applying the minimum 2 h rule.
         // Flooring each session first would lose partial hours across separate sessions.
         val millisByDay = mutableMapOf<LocalDate, Long>()
         for (session in completed) {
@@ -113,7 +112,7 @@ object DpMath {
                 cursor = partEnd
             }
         }
-        val shortDays = millisByDay.count { (date, elapsed) -> !date.isBefore(signed) && !date.isAfter(left) && elapsed > 2L * 60L * 60L * 1000L }
+        val shortDays = millisByDay.count { (date, elapsed) -> !date.isBefore(signed) && !date.isAfter(left) && elapsed >= 2L * 60L * 60L * 1000L }
         return TourTotals(hours, shortDays.toDouble().coerceAtMost(days.toDouble()), days, null, provisional)
     }
 }
