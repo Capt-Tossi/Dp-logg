@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.pointer.pointerInput
@@ -102,24 +103,36 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
     var reportTours by remember { mutableStateOf(emptyList<Tour>()) }
     var reportDetails by remember { mutableStateOf(LetterDetails("", "", "", "")) }
     var deleteSessionId by remember { mutableStateOf<String?>(null) }
+    var deleteAttachmentId by remember { mutableStateOf<String?>(null) }
+    var viewedPhoto by remember { mutableStateOf<Attachment?>(null) }
     var pendingOwner by rememberSaveable { mutableStateOf("") }
     var pendingCategory by rememberSaveable { mutableStateOf("") }
     var pendingFile by rememberSaveable { mutableStateOf("") }
+    var pendingReplaceId by rememberSaveable { mutableStateOf("") }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (pendingFile.isNotBlank()) {
-            if (success) save(data.copy(attachments = data.attachments + Attachment(ownerId = pendingOwner, category = pendingCategory, fileName = pendingFile, createdAtMillis = System.currentTimeMillis())))
-            else File(File(context.filesDir, "photos"), pendingFile).delete()
+            val previous = data.attachments.firstOrNull { it.id == pendingReplaceId }
+            val captured = File(File(context.filesDir, "photos"), pendingFile)
+            if (success && captured.length() > 0L && (pendingReplaceId.isBlank() || previous != null)) {
+                val updated = if (previous == null) data.attachments + Attachment(ownerId = pendingOwner, category = pendingCategory, fileName = pendingFile, createdAtMillis = System.currentTimeMillis())
+                    else data.attachments.map { if (it.id == previous.id) it.copy(fileName = pendingFile, createdAtMillis = System.currentTimeMillis(), rotationDegrees = 0) else it }
+                runCatching { save(data.copy(attachments = updated)) }
+                    .onSuccess { if (previous != null) File(File(context.filesDir, "photos"), previous.fileName).delete() }
+                    .onFailure { File(File(context.filesDir, "photos"), pendingFile).delete(); message = "Photo could not be saved: ${it.message}" }
+            } else captured.delete()
         }
-        pendingOwner = ""; pendingCategory = ""; pendingFile = ""
+        pendingOwner = ""; pendingCategory = ""; pendingFile = ""; pendingReplaceId = ""
     }
-    fun takePhoto(owner: String, category: String) {
+    fun takePhoto(owner: String, category: String, replaceId: String = "") {
         val dir = File(context.filesDir, "photos").apply { mkdirs() }
         val name = "${UUID.randomUUID()}.jpg"
         val file = File(dir, name).apply { createNewFile() }
-        pendingOwner = owner; pendingCategory = category; pendingFile = name
+        pendingOwner = owner; pendingCategory = category; pendingFile = name; pendingReplaceId = replaceId
         runCatching { camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.files", file)) }
-            .onFailure { file.delete(); pendingOwner = ""; pendingCategory = ""; pendingFile = ""; message = "Camera unavailable: ${it.message}" }
+            .onFailure { file.delete(); pendingOwner = ""; pendingCategory = ""; pendingFile = ""; pendingReplaceId = ""; message = "Camera unavailable: ${it.message}" }
     }
+    fun replacePhoto(a: Attachment) = takePhoto(a.ownerId, a.category, a.id)
+    fun viewPhoto(name: String) { viewedPhoto = data.attachments.firstOrNull { it.fileName == name } }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.openOutputStream(uri)?.use { store.exportZip(data, it) } ?: error("Cannot open file") }
@@ -152,10 +165,32 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
         text = { Text("This removes the selected session and its logged hours. The change will be included in future backups and reports.") },
         confirmButton = { TextButton(onClick = {
             val id = deleteSessionId ?: return@TextButton
+            val removedPhotos = data.attachments.filter { it.ownerId == id }
             save(data.copy(sessions = data.sessions.filterNot { it.id == id }, attachments = data.attachments.filterNot { it.ownerId == id }))
+            removedPhotos.forEach { File(File(context.filesDir, "photos"), it.fileName).delete() }
             deleteSessionId = null
         }) { Text("Delete") } },
         dismissButton = { TextButton(onClick = { deleteSessionId = null }) { Text("Cancel") } })
+    if (deleteAttachmentId != null) AlertDialog(onDismissRequest = { deleteAttachmentId = null },
+        title = { Text("Delete this photo?") },
+        text = { Text("This removes the photo from the app and future backups.") },
+        confirmButton = { TextButton(onClick = {
+            val id = deleteAttachmentId
+            val a = data.attachments.firstOrNull { it.id == id }
+            if (a != null) {
+                save(data.copy(attachments = data.attachments.filterNot { it.id == id }))
+                File(File(context.filesDir, "photos"), a.fileName).delete()
+            }
+            deleteAttachmentId = null
+        }) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = { deleteAttachmentId = null }) { Text("Cancel") } })
+    viewedPhoto?.let { a -> Dialog(onDismissRequest = { viewedPhoto = null }) {
+        Surface(shape = MaterialTheme.shapes.medium) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(a.category, style = MaterialTheme.typography.titleMedium)
+            PhotoImage(a, Modifier.fillMaxWidth().heightIn(max = 480.dp), ContentScale.Fit)
+            TextButton(onClick = { viewedPhoto = null }) { Text("Close") }
+        } }
+    } }
     Scaffold(
         topBar = { Surface(color = MaterialTheme.colorScheme.primary) { Text("DP Companion", modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(18.dp), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleLarge) } },
         bottomBar = { NavigationBar {
@@ -178,7 +213,8 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
                             val corrected = if (changed.startMillis != session.startMillis || changed.endMillis != session.endMillis)
                                 changed.copy(corrections = session.corrections + Correction(System.currentTimeMillis(), session.startMillis, session.endMillis, reason)) else changed
                             save(data.copy(sessions = data.sessions.map { if (it.id == session.id) corrected else it })); editId = null
-                        }, onPhoto = { takePhoto(session.id, it) }, onClose = { editId = null }, onOpenPhoto = { openPhoto(context, it) })
+                        }, onPhoto = { takePhoto(session.id, it) }, onClose = { editId = null }, onOpenPhoto = ::viewPhoto,
+                        onReplacePhoto = ::replacePhoto, onDeletePhoto = { deleteAttachmentId = it.id })
                     else editId = null
                 } else HomeScreen(data, onStart = { tour ->
                     save(data.copy(sessions = data.sessions + DpSession(tourId = tour.id, startMillis = System.currentTimeMillis())))
@@ -191,13 +227,18 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
                     val session = DpSession(tourId = tour.id, startMillis = now - 3_600_000, endMillis = now)
                     save(data.copy(sessions = data.sessions + session)); editId = session.id
                 }, onTours = { page = 1 }, onDelete = { deleteSessionId = it })
-                1 -> ToursScreen(data, save, onPhoto = { owner -> takePhoto(owner, "Service checklist") }, onOpenPhoto = { openPhoto(context, it) }, onVessels = { page = 2 })
-                2 -> VesselsScreen(data, save, onPhoto = { owner -> takePhoto(owner, "Vessel photo") }, onOpenPhoto = { openPhoto(context, it) })
+                1 -> ToursScreen(data, save, onPhoto = { owner -> takePhoto(owner, "Service checklist") }, onOpenPhoto = ::viewPhoto,
+                    onReplacePhoto = ::replacePhoto, onDeletePhoto = { deleteAttachmentId = it.id }, onVessels = { page = 2 })
+                2 -> VesselsScreen(data, save, onPhoto = { owner -> takePhoto(owner, "Vessel photo") }, onOpenPhoto = ::viewPhoto,
+                    onReplacePhoto = ::replacePhoto, onDeletePhoto = { deleteAttachmentId = it.id })
                 3 -> when (meSection) {
-                    1 -> CertificateScreen(data, save, onPhoto = { takePhoto("certificate", "DP certificate") }, onOpenPhoto = { openPhoto(context, it) }, onClose = { meSection = 0 })
+                    1 -> CertificateScreen(data, save, onPhoto = {
+                        takePhoto("certificate", "DP certificate", data.attachments.filter { it.ownerId == "certificate" && it.category == "DP certificate" }.maxByOrNull { it.createdAtMillis }?.id ?: "")
+                    }, onOpenPhoto = ::viewPhoto, onDeletePhoto = { deleteAttachmentId = it.id }, onClose = { meSection = 0 })
                     2 -> Column(Modifier.fillMaxSize()) {
                         TextButton(onClick = { meSection = 0 }) { Text("Back to Me") }
-                        Box(Modifier.weight(1f)) { CpdScreen(data, save, onPhoto = { owner -> takePhoto(owner, "CPD completion") }, onOpenPhoto = { openPhoto(context, it) }) }
+                        Box(Modifier.weight(1f)) { CpdScreen(data, save, onPhoto = { owner -> takePhoto(owner, "CPD completion") }, onOpenPhoto = ::viewPhoto,
+                            onReplacePhoto = ::replacePhoto, onDeletePhoto = { deleteAttachmentId = it.id }) }
                     }
                     3 -> ExportScreen(data, onClose = { meSection = 0 }, onPdf = { tours, layout, details ->
                         reportTours = tours; reportChoice = layout; reportDetails = details
@@ -268,6 +309,8 @@ private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSessio
                         if (selectedDelete == s.id) TextButton(onClick = { onDelete(s.id); selectedDelete = null }) { Text("🗑 Delete") }
                     }
                     Text("${DpMath.loggedHours(s.startMillis, s.endMillis!!)} logged hours · ${s.activity.ifBlank { "Activity not set" }}")
+                    val photoCount = data.attachments.count { it.ownerId == s.id }
+                    if (photoCount > 0) Text("📎 $photoCount", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     ReportReview.sessionIssues(s, tour, data.sessions).forEach { Text(it) }
                 }
             }
@@ -276,7 +319,8 @@ private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSessio
 }
 
 @Composable
-private fun SessionEditor(session: DpSession, tour: Tour?, photos: List<Attachment>, onSave: (DpSession, String) -> Unit, onPhoto: (String) -> Unit, onClose: () -> Unit, onOpenPhoto: (String) -> Unit) {
+private fun SessionEditor(session: DpSession, tour: Tour?, photos: List<Attachment>, onSave: (DpSession, String) -> Unit, onPhoto: (String) -> Unit, onClose: () -> Unit, onOpenPhoto: (String) -> Unit,
+                          onReplacePhoto: (Attachment) -> Unit, onDeletePhoto: (Attachment) -> Unit) {
     val context = LocalContext.current
     val zone = tour?.zoneId ?: ZoneId.systemDefault().id
     var start by remember(session.id) { mutableLongStateOf(session.startMillis) }
@@ -313,7 +357,7 @@ private fun SessionEditor(session: DpSession, tour: Tour?, photos: List<Attachme
             OutlinedButton(onClick = { onPhoto("DP checklist") }, modifier = Modifier.weight(1f)) { Text("Photo DP checklist", textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
             OutlinedButton(onClick = { onPhoto("Signed logbook page") }, modifier = Modifier.weight(1f)) { Text("Photo logbook page", textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
         }
-        photos.forEach { a -> TextButton(onClick = { onOpenPhoto(a.fileName) }) { Text("${a.category} · ${a.fileName.take(8)}") } }
+        photos.forEach { a -> AttachmentItem(a, onOpenPhoto, onReplacePhoto, onDeletePhoto) }
         if (session.corrections.isNotEmpty()) {
             HorizontalDivider(); Text("Time corrections", style = MaterialTheme.typography.titleMedium)
             session.corrections.forEach { c -> Text("${formatStamp(c.changedAtMillis, zone)} · Previous: ${formatStamp(c.previousStartMillis, zone)}–${c.previousEndMillis?.let { formatStamp(it, zone) } ?: "active"} · ${c.reason.ifBlank { "No reason entered" }}") }
@@ -345,17 +389,16 @@ private fun OtherChoice(label: String, value: String, options: List<String>, onC
 }
 
 @Composable
-private fun VesselThumbnail(data: AppData, vesselId: String, size: Int = 90) {
+private fun PhotoImage(attachment: Attachment, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop) {
     val context = LocalContext.current
-    val attachment = data.attachments.filter { it.ownerId == vesselId && it.category == "Vessel photo" }.maxByOrNull { it.createdAtMillis }
-    val bitmap = remember(attachment?.fileName, attachment?.rotationDegrees) {
-        attachment?.let { a -> runCatching {
-            val path = File(File(context.filesDir, "photos"), a.fileName).absolutePath
+    val bitmap = remember(attachment.fileName, attachment.rotationDegrees) {
+        runCatching {
+            val path = File(File(context.filesDir, "photos"), attachment.fileName).absolutePath
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(path, bounds)
             var sample = 1
             while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 512) sample *= 2
-            val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+            val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: error("Photo cannot be opened")
             val orientation = ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
             val matrix = Matrix().apply { when (orientation) {
                 ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
@@ -363,16 +406,43 @@ private fun VesselThumbnail(data: AppData, vesselId: String, size: Int = 90) {
                 ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(270f)
                 ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> postScale(-1f, 1f)
                 ExifInterface.ORIENTATION_FLIP_VERTICAL -> postScale(1f, -1f)
-            }; postRotate(a.rotationDegrees.toFloat()) }
-            decoded?.let { android.graphics.Bitmap.createBitmap(it, 0, 0, it.width, it.height, matrix, true).asImageBitmap() }
-        }.getOrNull() }
+                ExifInterface.ORIENTATION_TRANSPOSE -> { postRotate(90f); postScale(-1f, 1f) }
+                ExifInterface.ORIENTATION_TRANSVERSE -> { postRotate(270f); postScale(-1f, 1f) }
+            }; postRotate(attachment.rotationDegrees.toFloat()) }
+            android.graphics.Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true).asImageBitmap()
+        }.getOrNull()
     }
-    if (bitmap != null) Image(bitmap, contentDescription = "Vessel photo", contentScale = ContentScale.Crop,
-        modifier = Modifier.size(size.dp))
+    if (bitmap != null) Image(bitmap, contentDescription = attachment.category, contentScale = contentScale, modifier = modifier)
+    else Text("Photo unavailable", modifier = modifier)
 }
 
 @Composable
-private fun VesselsScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String) -> Unit, onOpenPhoto: (String) -> Unit) {
+private fun AttachmentItem(a: Attachment, onOpenPhoto: (String) -> Unit, onReplacePhoto: (Attachment) -> Unit, onDeletePhoto: (Attachment) -> Unit) {
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PhotoImage(a, Modifier.size(72.dp))
+            Column(Modifier.weight(1f)) {
+                Text(a.category, style = MaterialTheme.typography.titleSmall)
+                Text(formatStamp(a.createdAtMillis, ZoneId.systemDefault().id), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            TextButton(onClick = { onOpenPhoto(a.fileName) }) { Text("View") }
+            TextButton(onClick = { onReplacePhoto(a) }) { Text("Replace") }
+            TextButton(onClick = { onDeletePhoto(a) }) { Text("Delete") }
+        }
+    }
+}
+
+@Composable
+private fun VesselThumbnail(data: AppData, vesselId: String, size: Int = 90) {
+    val attachment = data.attachments.filter { it.ownerId == vesselId && it.category == "Vessel photo" }.maxByOrNull { it.createdAtMillis }
+    if (attachment != null) PhotoImage(attachment, Modifier.size(size.dp))
+}
+
+@Composable
+private fun VesselsScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String) -> Unit, onOpenPhoto: (String) -> Unit,
+                          onReplacePhoto: (Attachment) -> Unit, onDeletePhoto: (Attachment) -> Unit) {
     var selectedId by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -413,17 +483,16 @@ private fun VesselsScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (Stri
                 OutlinedButton(onClick = { onPhoto(vessel.id) }) { Text("Photo vessel") }
                 Button(onClick = { editing = false }, enabled = vessel.name.isNotBlank()) { Text("Done") }
             }
-            data.attachments.filter { it.ownerId == vessel.id && it.category == "Vessel photo" }.lastOrNull()?.let { a ->
-                TextButton(onClick = { onOpenPhoto(a.fileName) }) { Text("View vessel photo") }
-                TextButton(onClick = { save(data.copy(attachments = data.attachments.map { if (it.id == a.id) it.copy(rotationDegrees = (it.rotationDegrees + 90) % 360) else it })) }) { Text("Rotate thumbnail 90° clockwise") }
-            }
+            data.attachments.filter { it.ownerId == vessel.id && it.category == "Vessel photo" }
+                .forEach { a -> AttachmentItem(a, onOpenPhoto, onReplacePhoto, onDeletePhoto) }
             if (editing) TextButton(onClick = { confirmDelete = true }) { Text("Remove from My Vessels") }
         }
     }
 }
 
 @Composable
-private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String) -> Unit, onOpenPhoto: (String) -> Unit, onVessels: () -> Unit) {
+private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String) -> Unit, onOpenPhoto: (String) -> Unit,
+                        onReplacePhoto: (Attachment) -> Unit, onDeletePhoto: (Attachment) -> Unit, onVessels: () -> Unit) {
     val context = LocalContext.current
     val tour = data.tours.firstOrNull { it.id == data.activeTourId }
     var chosenId by remember { mutableStateOf("") }
@@ -493,17 +562,17 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
             if (totals.issue != null) Text(totals.issue, color = MaterialTheme.colorScheme.error)
             OutlinedButton(onClick = { onPhoto(tour.id) }) { Text("Photo service checklist") }
             data.attachments.filter { it.ownerId == tour.id }.forEachIndexed { index, a ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { onOpenPhoto(a.fileName) }, modifier = Modifier.weight(1f)) { Text("Photo ${index + 1}: ${a.category}", maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
-                    TextButton(onClick = { editingAttachmentId = a.id; attachmentLabel = a.category }) { Text("Edit label") }
-                }
+                Text("Photo ${index + 1}", style = MaterialTheme.typography.labelMedium)
+                AttachmentItem(a, onOpenPhoto, onReplacePhoto, onDeletePhoto)
+                TextButton(onClick = { editingAttachmentId = a.id; attachmentLabel = a.category }) { Text("Edit label") }
             }
         }
     }
 }
 
 @Composable
-private fun CpdScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String) -> Unit, onOpenPhoto: (String) -> Unit) {
+private fun CpdScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String) -> Unit, onOpenPhoto: (String) -> Unit,
+                      onReplacePhoto: (Attachment) -> Unit, onDeletePhoto: (Attachment) -> Unit) {
     val context = LocalContext.current
     var title by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf("CPD") }
@@ -525,7 +594,7 @@ private fun CpdScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String) 
             OutlinedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp)) {
                 Text(c.title, fontWeight = FontWeight.SemiBold); Text("${c.kind} · ${c.completedDate}")
                 TextButton(onClick = { onPhoto(c.id) }) { Text("Photo completion") }
-                data.attachments.filter { it.ownerId == c.id }.forEach { a -> TextButton(onClick = { onOpenPhoto(a.fileName) }) { Text("View ${a.category}") } }
+                data.attachments.filter { it.ownerId == c.id }.forEach { a -> AttachmentItem(a, onOpenPhoto, onReplacePhoto, onDeletePhoto) }
             } }
         }
     }
@@ -660,7 +729,8 @@ private fun ExportScreen(data: AppData, onClose: () -> Unit,
 }
 
 @Composable
-private fun CertificateScreen(data: AppData, save: (AppData) -> Unit, onPhoto: () -> Unit, onOpenPhoto: (String) -> Unit, onClose: () -> Unit) {
+private fun CertificateScreen(data: AppData, save: (AppData) -> Unit, onPhoto: () -> Unit, onOpenPhoto: (String) -> Unit,
+                              onDeletePhoto: (Attachment) -> Unit, onClose: () -> Unit) {
     val context = LocalContext.current
     val date = runCatching { LocalDate.parse(data.certificateExpiry) }.getOrNull()
     val remaining = date?.let { ChronoUnit.DAYS.between(LocalDate.now(), it) }
@@ -673,6 +743,7 @@ private fun CertificateScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (
             Button(onClick = { photo?.let { onOpenPhoto(it.fileName) } }, enabled = photo != null) { Text("View certificate") }
             OutlinedButton(onClick = onPhoto) { Text(if (photo == null) "Add photo" else "Update photo") }
         }
+        if (photo != null) TextButton(onClick = { onDeletePhoto(photo) }) { Text("Delete certificate photo") }
         OutlinedTextField(data.certificateNumber, { save(data.copy(certificateNumber = it)) }, label = { Text("DP certificate number") }, modifier = Modifier.fillMaxWidth())
         OutlinedButton(onClick = { pickDate(context, data.certificateIssue) { save(data.copy(certificateIssue = it)) } }) { Text("Issue date: ${data.certificateIssue.ifBlank { "Choose date" }}") }
         OutlinedButton(onClick = { pickDate(context, data.certificateExpiry) { save(data.copy(certificateExpiry = it)) } }) { Text("Certificate expiry: ${data.certificateExpiry.ifBlank { "Choose date" }}") }
@@ -701,11 +772,4 @@ private fun pickDateTime(context: Context, millis: Long, zone: String, onPicked:
     DatePickerDialog(context, { _, y, m, day ->
         TimePickerDialog(context, { _, h, minute -> onPicked(LocalDate.of(y,m+1,day).atTime(h,minute).atZone(z).toInstant().toEpochMilli()) }, current.hour, current.minute, true).show()
     }, current.year, current.monthValue - 1, current.dayOfMonth).show()
-}
-private fun openPhoto(context: Context, name: String) {
-    if (name.contains('/') || name.contains('\\')) return
-    val file = File(File(context.filesDir, "photos"), name)
-    if (!file.isFile) return
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
-    context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri,"image/jpeg").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
 }
