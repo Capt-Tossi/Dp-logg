@@ -11,7 +11,9 @@ import android.os.Bundle
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,6 +22,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -38,6 +42,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -50,10 +55,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import java.io.File
 import java.time.*
@@ -116,8 +125,10 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
         if (granted) save(data.copy(renewalReminderEnabled = true))
     }
     var page by remember { mutableStateOf(0) }
+    var pageHistory by remember { mutableStateOf(emptyList<Int>()) }
     var meSection by remember { mutableIntStateOf(0) }
     var editId by remember { mutableStateOf<String?>(null) }
+    var showAllSessions by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     LaunchedEffect(message) {
         if (message.isNotBlank()) {
@@ -135,6 +146,10 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
     var pendingCategory by rememberSaveable { mutableStateOf("") }
     var pendingFile by rememberSaveable { mutableStateOf("") }
     var pendingReplaceId by rememberSaveable { mutableStateOf("") }
+    fun navigateTo(next: Int) {
+        if (next != page) { pageHistory = pageHistory + page; page = next }
+        editId = null; meSection = 0; showAllSessions = false
+    }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (pendingFile.isNotBlank()) {
             val previous = data.attachments.firstOrNull { it.id == pendingReplaceId }
@@ -186,6 +201,20 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
             context.contentResolver.openOutputStream(uri)?.use { ReportExport.writeDocx(data, reportTours, reportChoice, reportDetails, it) } ?: error("Cannot open file")
         }.onSuccess { message = "Word draft saved" }.onFailure { message = "Word export failed: ${it.message}" }
     }
+    BackHandler(enabled = editId == null && (viewedPhoto != null || deleteSessionId != null || deleteAttachmentId != null || meSection != 0 || showAllSessions || page != 0 || pageHistory.isNotEmpty())) {
+        when {
+            viewedPhoto != null -> viewedPhoto = null
+            deleteAttachmentId != null -> deleteAttachmentId = null
+            deleteSessionId != null -> deleteSessionId = null
+            meSection != 0 && page == 3 -> meSection = 0
+            showAllSessions && page == 0 -> showAllSessions = false
+            pageHistory.isNotEmpty() -> {
+                page = pageHistory.last(); pageHistory = pageHistory.dropLast(1)
+                meSection = 0; showAllSessions = false
+            }
+            page != 0 -> { page = 0; meSection = 0; showAllSessions = false }
+        }
+    }
     if (deleteSessionId != null) AlertDialog(onDismissRequest = { deleteSessionId = null },
         title = { Text("Delete this DP session?") },
         text = { Text("This removes the selected session and its logged hours. The change will be included in future backups and reports.") },
@@ -220,11 +249,13 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
     } }
     Scaffold(
         topBar = { Surface(color = MaterialTheme.colorScheme.primary) { Text("DP Companion", modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(18.dp), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleLarge) } },
-        bottomBar = { NavigationBar {
+        bottomBar = { if (editId == null) NavigationBar {
             val icons = listOf(R.drawable.nav_dp, R.drawable.nav_sea_service, R.drawable.nav_vessels, R.drawable.nav_me)
             listOf("DP", "Sea Service", "My Vessels", "DPO").forEachIndexed { i, title ->
-                NavigationBarItem(selected = page == i, onClick = { page = i; editId = null; meSection = 0 },
-                    icon = { Image(painterResource(icons[i]), contentDescription = null, modifier = Modifier.size(30.dp)) }, label = { Text(title) })
+                NavigationBarItem(selected = page == i, onClick = { navigateTo(i) },
+                    icon = { Image(painterResource(icons[i]), contentDescription = null, modifier = Modifier.size(30.dp)) },
+                    label = { Text(if (i == 0) "DP\nLogg" else title, textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelSmall, lineHeight = 13.sp, maxLines = 2) })
             }
         } }
     ) { padding ->
@@ -243,8 +274,9 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
                         }, onPhoto = { takePhoto(session.id, it) }, onClose = { editId = null }, onOpenPhoto = ::viewPhoto,
                         onReplacePhoto = ::replacePhoto, onDeletePhoto = { deleteAttachmentId = it.id }, onDelete = { deleteSessionId = session.id })
                     else editId = null
-                } else HomeScreen(data, onStart = { tour ->
-                    save(data.copy(sessions = data.sessions + DpSession(tourId = tour.id, startMillis = System.currentTimeMillis())))
+                } else HomeScreen(data, showAll = showAllSessions, onShowAll = { showAllSessions = it }, onStart = { tour ->
+                    if (data.sessions.none { it.endMillis == null })
+                        save(data.copy(sessions = data.sessions + DpSession(tourId = tour.id, startMillis = System.currentTimeMillis())))
                 }, onStop = { active ->
                     val stoppedAt = System.currentTimeMillis()
                     save(data.copy(sessions = data.sessions.map { if (it.id == active.id) it.copy(endMillis = stoppedAt, originalEndMillis = stoppedAt) else it }))
@@ -253,9 +285,9 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
                     val now = System.currentTimeMillis()
                     val session = DpSession(tourId = tour.id, startMillis = now - 3_600_000, endMillis = now)
                     save(data.copy(sessions = data.sessions + session)); editId = session.id
-                }, onTours = { page = 1 }, onDelete = { deleteSessionId = it })
+                }, onTours = { navigateTo(1) }, onDelete = { deleteSessionId = it })
                 1 -> ToursScreen(data, save, onPhoto = { owner -> takePhoto(owner, "Service checklist") }, onOpenPhoto = ::viewPhoto,
-                    onReplacePhoto = ::replacePhoto, onDeletePhoto = { deleteAttachmentId = it.id }, onVessels = { page = 2 })
+                    onReplacePhoto = ::replacePhoto, onDeletePhoto = { deleteAttachmentId = it.id }, onVessels = { navigateTo(2) })
                 2 -> VesselsScreen(data, save, onPhoto = { owner -> takePhoto(owner, "Vessel photo") }, onOpenPhoto = ::viewPhoto,
                     onReplacePhoto = ::replacePhoto, onDeletePhoto = { deleteAttachmentId = it.id })
                 3 -> when (meSection) {
@@ -289,15 +321,26 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
 }
 
 @Composable
-private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSession) -> Unit, onEdit: (String) -> Unit, onAddManual: (Tour) -> Unit, onTours: () -> Unit, onDelete: (String) -> Unit) {
+private fun HomeScreen(data: AppData, showAll: Boolean, onShowAll: (Boolean) -> Unit,
+                       onStart: (Tour) -> Unit, onStop: (DpSession) -> Unit, onEdit: (String) -> Unit,
+                       onAddManual: (Tour) -> Unit, onTours: () -> Unit, onDelete: (String) -> Unit) {
     val tour = data.tours.firstOrNull { it.id == data.activeTourId }
     val active = data.sessions.firstOrNull { it.endMillis == null }
     var selectedDelete by remember(tour?.id) { mutableStateOf<String?>(null) }
-    var showAll by remember(tour?.id) { mutableStateOf(false) }
-    val sessions = tour?.let { t -> data.sessions.filter { it.tourId == t.id && it.endMillis != null }.sortedByDescending { it.startMillis } } ?: emptyList()
+    var transitioning by remember(tour?.id) { mutableStateOf(false) }
+    val context = LocalContext.current
+    val motionDisabled = remember(context) { runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) }
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(targetValue = if (pressed || transitioning) .95f else 1f,
+        animationSpec = tween(durationMillis = if (motionDisabled) 0 else 100), label = "Start DP press")
+    LaunchedEffect(transitioning) {
+        if (transitioning) { delay(if (motionDisabled) 0L else 170L); transitioning = false }
+    }
+    val sessions = tour?.let { t -> data.sessions.filter { it.tourId == t.id }.sortedByDescending { it.startMillis } } ?: emptyList()
     if (showAll && tour != null) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            item { TextButton(onClick = { showAll = false }) { Text("Back to recent sessions") } }
+            item { TextButton(onClick = { onShowAll(false) }) { Text("Back to recent sessions") } }
             item { Text("All sessions (${sessions.size})", style = MaterialTheme.typography.titleLarge) }
             items(sessions, key = { it.id }) { s -> SessionCard(s, tour, data, selectedDelete,
                 onSelectDelete = { selectedDelete = it }, onEdit = onEdit,
@@ -318,8 +361,18 @@ private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSessio
         if (totals.provisional) Text("Provisional total until disembark date is entered", style = MaterialTheme.typography.bodySmall)
         if (totals.issue != null) Text(totals.issue, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(30.dp))
-        if (active == null) {
-            Button(onClick = { onStart(tour) }, modifier = Modifier.fillMaxWidth().height(88.dp)) { Text("START DP", style = MaterialTheme.typography.headlineSmall) }
+        if (active == null || transitioning) {
+            Button(onClick = { if (!transitioning && active == null) { transitioning = true; onStart(tour) } },
+                enabled = !transitioning && active == null, interactionSource = interaction,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18805A), contentColor = Color.White,
+                    disabledContainerColor = Color(0xFF18805A), disabledContentColor = Color.White),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 7.dp, pressedElevation = 1.dp),
+                modifier = Modifier.fillMaxWidth().height(88.dp).graphicsLayer { scaleX = scale; scaleY = scale }
+                    .shadow(7.dp, RoundedCornerShape(48.dp))) {
+                Icon(painterResource(R.drawable.ic_dp_start), contentDescription = null, modifier = Modifier.size(30.dp))
+                Spacer(Modifier.width(12.dp))
+                Text("START DP", style = MaterialTheme.typography.headlineSmall)
+            }
             OutlinedButton(onClick = { onAddManual(tour) }, modifier = Modifier.fillMaxWidth()) { Text("Record past DP session") }
         } else {
             Text("Recording since ${formatStamp(active.startMillis, tour.zoneId)}", style = MaterialTheme.typography.titleMedium)
@@ -333,7 +386,7 @@ private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSessio
         sessions.take(8).forEach { s -> SessionCard(s, tour, data, selectedDelete,
             onSelectDelete = { selectedDelete = it }, onEdit = onEdit,
             onDelete = { onDelete(it); selectedDelete = null }) }
-        if (sessions.size > 8) TextButton(onClick = { showAll = true }, modifier = Modifier.fillMaxWidth()) { Text("View all sessions (${sessions.size})") }
+        if (sessions.size > 8) TextButton(onClick = { onShowAll(true) }, modifier = Modifier.fillMaxWidth()) { Text("View all sessions (${sessions.size})") }
     }
 }
 
@@ -353,12 +406,13 @@ private fun SessionCard(s: DpSession, tour: Tour, data: AppData, selectedDelete:
             val timer = launch { delay(900L); longPressed = true; onSelectDelete(s.id) }
             val up = awaitPointerEventScope { waitForUpOrCancellation() }
             timer.cancel()
-            if (up != null) { if (longPressed) up.consume() else onEdit(s.id) }
+            if (up != null) { if (longPressed) up.consume() else if (s.endMillis != null) onEdit(s.id) }
         } }
     }, colors = CardDefaults.outlinedCardColors(containerColor = tint)) {
         Column(Modifier.padding(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("${if (status == RecordStatus.OK) "✓" else "!"}  ${formatStamp(s.startMillis, tour.zoneId)}", fontWeight = FontWeight.SemiBold)
+                Text("${if (status == RecordStatus.OK) "✓" else "!"}  ${SessionDisplay.range(s, tour)}",
+                    modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                 if (selectedDelete == s.id) Button(onClick = { onDelete(s.id) },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF892026), contentColor = Color.White)) {
                     Icon(painterResource(R.drawable.ic_delete), contentDescription = null, modifier = Modifier.size(18.dp))
@@ -366,10 +420,13 @@ private fun SessionCard(s: DpSession, tour: Tour, data: AppData, selectedDelete:
                     Text("Delete")
                 }
             }
-            Text("${DpMath.loggedHours(s.startMillis, s.endMillis!!)} logged hours · ${s.activity.ifBlank { "Activity not set" }}")
+            Text(if (s.endMillis == null) "Recording in progress · ${s.activity.ifBlank { "Activity not set" }}"
+                else "${DpMath.loggedHours(s.startMillis, s.endMillis)} logged hours · ${s.activity.ifBlank { "Activity not set" }}")
             val photoCount = data.attachments.count { it.ownerId == s.id }
             if (photoCount > 0) Text("📎 $photoCount", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            ReportReview.sessionIssues(s, tour, data.sessions).filterNot { it == "Activity not set" && s.activity.isBlank() }.forEach { Text(it) }
+            ReportReview.sessionIssues(s, tour, data.sessions)
+                .filterNot { (it == "Activity not set" && s.activity.isBlank()) || (it == "Session still running" && s.endMillis == null) }
+                .forEach { Text(it) }
         }
     }
 }
@@ -387,6 +444,16 @@ private fun SessionEditor(session: DpSession, tour: Tour?, photos: List<Attachme
     var reason by remember(session.id) { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
+    var confirmDiscard by remember(session.id) { mutableStateOf(false) }
+    val dirty = start != session.startMillis || end != (session.endMillis ?: end) ||
+        activity != session.activity || location != session.location || notes != session.notes || reason.isNotBlank()
+    fun requestClose() { if (dirty) confirmDiscard = true else onClose() }
+    BackHandler { requestClose() }
+    if (confirmDiscard) AlertDialog(onDismissRequest = { confirmDiscard = false },
+        title = { Text("Discard unsaved changes?") },
+        text = { Text("Your changes to this DP session have not been saved.") },
+        confirmButton = { TextButton(onClick = { confirmDiscard = false; onClose() }) { Text("Discard") } },
+        dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } })
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Review session", style = MaterialTheme.typography.headlineSmall)
         OutlinedButton(onClick = { pickDateTime(context, start, zone) { start = it } }, modifier = Modifier.fillMaxWidth()) { Text("Start: ${formatStamp(start, zone)}") }
@@ -407,7 +474,7 @@ private fun SessionEditor(session: DpSession, tour: Tour?, photos: List<Attachme
             else onSave(session.copy(startMillis = start, endMillis = end, activity = activity, location = location, notes = notes), reason)
         }, modifier = Modifier.fillMaxWidth()) { Text("Save session") }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = onClose) { Text("Back") }
+            TextButton(onClick = { requestClose() }) { Text("Back") }
             TextButton(onClick = onDelete, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Delete") }
         }
         HorizontalDivider()
@@ -592,7 +659,43 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
     var vesselMenu by remember { mutableStateOf(false) }
     var editingAttachmentId by remember { mutableStateOf<String?>(null) }
     var attachmentLabel by remember { mutableStateOf("") }
+    var replacingVessel by remember { mutableStateOf(false) }
+    var replacementVesselId by remember { mutableStateOf("") }
+    var confirmDeleteTour by remember { mutableStateOf(false) }
     val chosen = data.vessels.firstOrNull { it.id == chosenId }
+    if (replacingVessel && tour != null) AlertDialog(
+        onDismissRequest = { replacingVessel = false },
+        title = { Text("Update vessel for this service period") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Choose a vessel to replace this period's saved vessel details. Sessions and documents stay with the period.")
+            Column(Modifier.heightIn(max = 250.dp).verticalScroll(rememberScrollState())) {
+                data.vessels.forEach { v -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = replacementVesselId == v.id, onClick = { replacementVesselId = v.id })
+                    TextButton(onClick = { replacementVesselId = v.id }) { Text(v.name.ifBlank { "Unnamed vessel" }) }
+                } }
+            }
+            data.vessels.firstOrNull { it.id == replacementVesselId }?.let { v ->
+                Text("Will save: ${v.name.ifBlank { "Unnamed vessel" }} · IMO ${v.imo.ifBlank { "—" }} · ${v.type} · ${v.dpClass}\nDP system: ${v.dpSystem.ifBlank { "Not recorded" }} · GT ${v.grossTonnage.ifBlank { "—" }}")
+            }
+        } },
+        confirmButton = { TextButton(onClick = {
+            save(data.reassignTourVessel(tour.id, replacementVesselId)); replacingVessel = false
+        }, enabled = data.vessels.any { it.id == replacementVesselId }) { Text("Update period") } },
+        dismissButton = { TextButton(onClick = { replacingVessel = false }) { Text("Cancel") } }
+    )
+    if (confirmDeleteTour && tour != null) {
+        val sessionIds = data.sessions.filter { it.tourId == tour.id }.map { it.id }.toSet()
+        val removedPhotos = data.attachments.filter { it.ownerId == tour.id || it.ownerId in sessionIds }
+        AlertDialog(onDismissRequest = { confirmDeleteTour = false },
+            title = { Text("Delete this service period?") },
+            text = { Text("This permanently removes this period, its ${sessionIds.size} DP session(s), and ${removedPhotos.size} attached photo(s) from the app and future backups. The vessel in My Vessels and other periods stay.") },
+            confirmButton = { TextButton(onClick = {
+                save(data.removeTour(tour.id))
+                removedPhotos.forEach { File(File(context.filesDir, "photos"), it.fileName).delete() }
+                confirmDeleteTour = false
+            }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Delete period") } },
+            dismissButton = { TextButton(onClick = { confirmDeleteTour = false }) { Text("Cancel") } })
+    }
     if (editingAttachmentId != null) AlertDialog(
         onDismissRequest = { editingAttachmentId = null },
         title = { Text("Edit photo label") },
@@ -641,6 +744,8 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
                 if (data.vessels.any { it.id == tour.vesselId }) VesselThumbnail(data, tour.vesselId)
             }
             Text("Vessel details are saved as a snapshot for this service period.", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = { replacementVesselId = tour.vesselId; replacingVessel = true },
+                enabled = data.vessels.isNotEmpty()) { Text("Update vessel for this period") }
             OtherChoice("Shipboard rank", tour.rank, ranks) { value ->
                 save(data.copy(tours = data.tours.map { if (it.id == tour.id) tour.copy(rank = value) else it }, preferredRank = value))
             }
@@ -663,6 +768,8 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
                 AttachmentItem(a, onOpenPhoto, onReplacePhoto, onDeletePhoto)
                 TextButton(onClick = { editingAttachmentId = a.id; attachmentLabel = a.category }) { Text("Edit label") }
             }
+            TextButton(onClick = { confirmDeleteTour = true },
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Delete service period") }
         }
     }
 }
@@ -720,8 +827,12 @@ private fun MeScreen(data: AppData, save: (AppData) -> Unit, onCertificate: () -
         OutlinedCard(onClick = onCertificate, modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
             Text("Certificate", style = MaterialTheme.typography.titleLarge)
             Text(data.certificateNumber.ifBlank { "Add certificate details" })
-            Text(CertificateRenewal.status(data.certificateExpiry))
-            if (data.certificateExpiry.isNotBlank()) Text("Expires ${data.certificateExpiry}", style = MaterialTheme.typography.bodySmall)
+            if (data.certificateExpiry.isNotBlank()) Text("Expires ${displayDate(data.certificateExpiry)}", style = MaterialTheme.typography.bodyMedium)
+            Text(CertificateRenewal.status(data.certificateExpiry), style = MaterialTheme.typography.titleSmall)
+            CertificateRenewal.message(data.certificateExpiry).takeIf { it.isNotBlank() }?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium,
+                    color = if (it == "Renewal applications are open") Color(0xFF176B49) else MaterialTheme.colorScheme.primary)
+            }
         } }
         OutlinedCard(onClick = onCpd, modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
             Text("CPD / Training", style = MaterialTheme.typography.titleLarge)
@@ -751,11 +862,19 @@ private fun AboutScreen(onClose: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onClose) { Text("Back to DPO") }
         Text("About DP Companion", style = MaterialTheme.typography.headlineSmall)
-        Text("Version 0.5.2", style = MaterialTheme.typography.titleMedium)
+        Text("Version 0.5.3", style = MaterialTheme.typography.titleMedium)
         Text("Developed with Torstein Sørdal, Master and Senior DPO, to make it easier to record DP sessions during work at sea and prepare accurate sea service summaries.")
         Text("Record start and stop times, correct entries later, manage vessels and service periods, save photos of supporting documents, track CPD/training and certificate validity, and export drafts for company verification.")
         Text("Your records and photos stay on this device unless you choose to export or share them. Export a backup regularly. The app works offline; opening NI certificate verification requires a connection.")
         Text("This is a personal working record. Confirm DP time against the vessel's records and the signed NI/IMCA logbook. A company confirmation letter is a draft until an authorised company representative verifies and signs it.")
+        HorizontalDivider()
+        Text("Changelog", style = MaterialTheme.typography.titleLarge)
+        Text("Version 0.5.3", style = MaterialTheme.typography.titleMedium)
+        Text("Edit or delete Sea Service periods; clearer certificate renewal text; system Back navigation; session time ranges; centered DP / Logg label; refreshed START DP control.")
+        Text("Version 0.5.2", style = MaterialTheme.typography.titleMedium)
+        Text("Expanded the launcher icon and removed its white surrounding ring.")
+        Text("Version 0.5.1", style = MaterialTheme.typography.titleMedium)
+        Text("Added certificate renewal window and optional offline reminder, improved Sea Service vessel details and export drafts, photo presentation, session deletion, and Continuous watch-hour entry.")
     }
 }
 
@@ -845,9 +964,13 @@ private fun CertificateScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (
         OutlinedTextField(data.certificateNumber, { save(data.copy(certificateNumber = it)) }, label = { Text("DP certificate number") }, modifier = Modifier.fillMaxWidth())
         OutlinedButton(onClick = { pickDate(context, data.certificateIssue) { save(data.copy(certificateIssue = it)) } }) { Text("Issue date: ${data.certificateIssue.ifBlank { "Choose date" }}") }
         OutlinedButton(onClick = { pickDate(context, data.certificateExpiry) { save(data.copy(certificateExpiry = it)) } }) { Text("Certificate expiry: ${data.certificateExpiry.ifBlank { "Choose date" }}") }
-        Text("Expiry date: ${data.certificateExpiry.ifBlank { "Choose date" }}")
+        Text("Expiry date: ${data.certificateExpiry.takeIf { it.isNotBlank() }?.let(::displayDate) ?: "Choose date"}")
         Text(CertificateRenewal.status(data.certificateExpiry), style = MaterialTheme.typography.titleMedium)
-        if (data.certificateExpiry.isNotBlank()) Text("NI online revalidation opens six calendar months before expiry. Other requirements still apply.", style = MaterialTheme.typography.bodySmall)
+        CertificateRenewal.message(data.certificateExpiry).takeIf { it.isNotBlank() }?.let {
+            Text(it, style = MaterialTheme.typography.titleMedium,
+                color = if (it == "Renewal applications are open") Color(0xFF176B49) else MaterialTheme.colorScheme.primary)
+        }
+        if (data.certificateExpiry.isNotBlank()) Text("NI online revalidation can be started six calendar months before expiry. Other requirements still apply.", style = MaterialTheme.typography.bodySmall)
         OutlinedButton(onClick = onReminderToggle, enabled = data.certificateExpiry.isNotBlank()) {
             Text(if (data.renewalReminderEnabled) "Renewal reminder: On" else "Renewal reminder: Off")
         }
@@ -865,6 +988,7 @@ private fun CertificateScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (
 }
 
 private fun Double.formatDays() = if (this % 1.0 == 0.0) toInt().toString() else "%.2f".format(java.util.Locale.US, this)
+private fun displayDate(iso: String): String = runCatching { LocalDate.parse(iso).format(dateFormat) }.getOrDefault(iso)
 private fun formatStamp(millis: Long, zone: String): String = runCatching { Instant.ofEpochMilli(millis).atZone(ZoneId.of(zone)).format(stampFormat) }.getOrElse { Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(stampFormat) }
 private fun pickDate(context: Context, current: String, onPicked: (String) -> Unit) {
     val d = runCatching { LocalDate.parse(current) }.getOrElse { LocalDate.now() }

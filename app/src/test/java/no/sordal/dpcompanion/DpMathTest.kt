@@ -129,7 +129,56 @@ class DpMathTest {
 
     @Test fun renewalWindowUsesCalendarMonthsAndKeepsExpiredDistinct() {
         assertEquals(LocalDate.of(2030,12,28),CertificateRenewal.openingDate("2031-06-28"))
-        assertEquals("Renewal window open · 182 days to expire",CertificateRenewal.status("2031-06-28",LocalDate.of(2030,12,28)))
+        assertEquals("182 days to expire",CertificateRenewal.status("2031-06-28",LocalDate.of(2030,12,28)))
+        assertEquals("You can apply for renewal from 28 Dec 2030",CertificateRenewal.message("2031-06-28",LocalDate.of(2030,12,27)))
+        assertEquals("Renewal applications are open",CertificateRenewal.message("2031-06-28",LocalDate.of(2030,12,28)))
         assertEquals("Expired 1 day ago",CertificateRenewal.status("2031-06-28",LocalDate.of(2031,6,29)))
+        assertEquals("Certificate expired",CertificateRenewal.message("2031-06-28",LocalDate.of(2031,6,29)))
+    }
+
+    @Test fun reassigningTourUpdatesSnapshotButKeepsItsSessionsAndDocuments() {
+        val first=Vessel(id="v1",name="Old name",imo="1234567",dpSystem="Old DP")
+        val second=Vessel(id="v2",name="New vessel",imo="7654321",type="AHTS",dpClass="DP3",dpSystem="K-Pos",grossTonnage="4500")
+        val t=AppData().newTour(first).copy(id="t",rank="Master",signedOn="2026-09-29")
+        val session=DpSession(id="s",tourId="t",startMillis=time(29,10),endMillis=time(29,15))
+        val attachment=Attachment(id="a",ownerId="s",category="DP checklist",fileName="photo.jpg",createdAtMillis=0)
+        val before=AppData(vessels=listOf(first,second),tours=listOf(t),sessions=listOf(session),attachments=listOf(attachment))
+        val after=before.reassignTourVessel("t","v2")
+        assertEquals("New vessel",after.tours.single().vessel)
+        assertEquals("7654321",after.tours.single().imo)
+        assertEquals("K-Pos",after.tours.single().dpSystem)
+        assertEquals("4500",after.tours.single().grossTonnage)
+        assertEquals("Master",after.tours.single().rank)
+        assertEquals(before.sessions,after.sessions)
+        assertEquals(before.attachments,after.attachments)
+        assertEquals("Old name",before.tours.single().vessel)
+    }
+
+    @Test fun deletingServicePeriodRemovesOnlyItsSessionsAndPhotosAndSelectsAnotherPeriod() {
+        val t1=Tour(id="t1",signedOn="2026-09-01")
+        val t2=Tour(id="t2",signedOn="2026-09-10")
+        val s1=DpSession(id="s1",tourId="t1",startMillis=time(29,1))
+        val s2=DpSession(id="s2",tourId="t2",startMillis=time(29,2))
+        val photos=listOf(
+            Attachment(id="a1",ownerId="t1",category="Checklist",fileName="one.jpg",createdAtMillis=0),
+            Attachment(id="a2",ownerId="s1",category="Logbook",fileName="two.jpg",createdAtMillis=0),
+            Attachment(id="a3",ownerId="s2",category="Logbook",fileName="three.jpg",createdAtMillis=0))
+        val data=AppData(vessels=listOf(Vessel(id="v")),tours=listOf(t1,t2),sessions=listOf(s1,s2),attachments=photos,activeTourId="t1")
+        val after=data.removeTour("t1")
+        assertEquals(listOf(t2),after.tours)
+        assertEquals(listOf(s2),after.sessions)
+        assertEquals(listOf(photos[2]),after.attachments)
+        assertEquals("t2",after.activeTourId)
+        assertEquals(data.vessels,after.vessels)
+    }
+
+    @Test fun sessionCardRangeShowsEndTimeAndCrossMidnightDate() {
+        val normal=Tour(mode="Short operations",zoneId="UTC")
+        val continuous=normal.copy(mode="Continuous DP")
+        val session=DpSession(tourId="t",startMillis=time(29,10,10),endMillis=time(29,15,10))
+        assertEquals("29 Sep 2026 10:10–15:10",SessionDisplay.range(session,normal))
+        assertEquals("29 Sep 2026 10:10 – 29 Sep 2026 15:10",SessionDisplay.range(session,continuous))
+        assertEquals("29 Sep 2026 23:00 – 30 Sep 2026 01:00",SessionDisplay.range(session.copy(startMillis=time(29,23),endMillis=time(30,1)),normal))
+        assertEquals("29 Sep 2026 10:10 · Ongoing",SessionDisplay.range(session.copy(endMillis=null),normal))
     }
 }

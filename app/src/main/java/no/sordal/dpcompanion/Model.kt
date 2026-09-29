@@ -3,9 +3,11 @@ package no.sordal.dpcompanion
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.net.URLEncoder
 import java.util.UUID
+import java.util.Locale
 
 data class Tour(
     val id: String = UUID.randomUUID().toString(),
@@ -58,6 +60,41 @@ fun AppData.newTour(vessel: Vessel): Tour = Tour(
     rank = preferredRank, capacity = preferredCapacity
 )
 
+fun AppData.reassignTourVessel(tourId: String, vesselId: String): AppData {
+    val vessel = vessels.firstOrNull { it.id == vesselId } ?: return this
+    if (tours.none { it.id == tourId }) return this
+    return copy(tours = tours.map { tour -> if (tour.id != tourId) tour else tour.copy(
+        vesselId = vessel.id, vessel = vessel.name, imo = vessel.imo, vesselType = vessel.type,
+        dpClass = vessel.dpClass, dpSystem = vessel.dpSystem, grossTonnage = vessel.grossTonnage
+    ) })
+}
+
+fun AppData.removeTour(tourId: String): AppData {
+    if (tours.none { it.id == tourId }) return this
+    val removedSessions = sessions.filter { it.tourId == tourId }.map { it.id }.toSet()
+    val remainingTours = tours.filterNot { it.id == tourId }
+    val nextActive = if (activeTourId != tourId) activeTourId
+        else remainingTours.maxWithOrNull(compareBy<Tour> { it.signedOn }.thenBy { it.id })?.id
+    return copy(tours = remainingTours, sessions = sessions.filterNot { it.id in removedSessions },
+        attachments = attachments.filterNot { it.ownerId == tourId || it.ownerId in removedSessions },
+        activeTourId = nextActive)
+}
+
+object SessionDisplay {
+    private val dateTime = DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm", Locale.ENGLISH)
+    private val time = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
+
+    fun range(session: DpSession, tour: Tour): String {
+        val zone = runCatching { ZoneId.of(tour.zoneId) }.getOrDefault(ZoneId.systemDefault())
+        val start = Instant.ofEpochMilli(session.startMillis).atZone(zone)
+        val end = session.endMillis?.let { Instant.ofEpochMilli(it).atZone(zone) }
+            ?: return "${start.format(dateTime)} · Ongoing"
+        return if (tour.mode != "Continuous DP" && start.toLocalDate() == end.toLocalDate())
+            "${start.format(dateTime)}–${end.format(time)}"
+        else "${start.format(dateTime)} – ${end.format(dateTime)}"
+    }
+}
+
 object CertificateRenewal {
     fun openingDate(expiry: String): LocalDate? = runCatching { LocalDate.parse(expiry).minusMonths(6) }.getOrNull()
     fun status(expiry: String, today: LocalDate = LocalDate.now()): String {
@@ -65,9 +102,15 @@ object CertificateRenewal {
         val days = ChronoUnit.DAYS.between(today, date)
         return when {
             days < 0 -> "Expired ${-days} ${if (days == -1L) "day" else "days"} ago"
-            !today.isBefore(date.minusMonths(6)) -> "Renewal window open · $days days to expire"
-            else -> "$days days to expire · Opens ${date.minusMonths(6)}"
+            else -> "$days ${if (days == 1L) "day" else "days"} to expire"
         }
+    }
+    fun message(expiry: String, today: LocalDate = LocalDate.now()): String {
+        val date = runCatching { LocalDate.parse(expiry) }.getOrNull() ?: return ""
+        if (today.isAfter(date)) return "Certificate expired"
+        return if (today.isBefore(date.minusMonths(6)))
+            "You can apply for renewal from ${date.minusMonths(6).format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH))}"
+        else "Renewal applications are open"
     }
 }
 
