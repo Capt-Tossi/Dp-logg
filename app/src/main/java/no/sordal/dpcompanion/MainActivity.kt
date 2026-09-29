@@ -22,6 +22,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -107,13 +109,13 @@ private fun SeaBackground() {
             cubicTo(size.width * .3f, size.height * .72f, size.width * .67f, size.height * .84f, size.width, size.height * .76f)
             lineTo(size.width, size.height); lineTo(0f, size.height); close()
         }
-        drawPath(base, Color(0xFF85BAC6).copy(alpha = .07f))
+        drawPath(base, Color(0xFF85BAC6).copy(alpha = .12f))
         val lower = Path().apply {
             moveTo(0f, size.height * .88f)
             cubicTo(size.width * .28f, size.height * .83f, size.width * .7f, size.height * .94f, size.width, size.height * .86f)
             lineTo(size.width, size.height); lineTo(0f, size.height); close()
         }
-        drawPath(lower, Color(0xFF417C9D).copy(alpha = .05f))
+        drawPath(lower, Color(0xFF417C9D).copy(alpha = .10f))
     }
 }
 
@@ -248,14 +250,25 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
         } }
     } }
     Scaffold(
-        topBar = { Surface(color = MaterialTheme.colorScheme.primary) { Text("DP Companion", modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(18.dp), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleLarge) } },
+        topBar = {
+            Box(
+                Modifier.fillMaxWidth()
+                    .background(Brush.horizontalGradient(listOf(Color(0xFF032349), Color(0xFF064A8E), Color(0xFF0784BF))))
+                    .statusBarsPadding().height(72.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("DP Companion", color = Color.White, fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+            }
+        },
         bottomBar = { if (editId == null) NavigationBar {
             val icons = listOf(R.drawable.nav_dp, R.drawable.nav_sea_service, R.drawable.nav_vessels, R.drawable.nav_me)
             listOf("DP", "Sea Service", "My Vessels", "DPO").forEachIndexed { i, title ->
                 NavigationBarItem(selected = page == i, onClick = { navigateTo(i) },
                     icon = { Image(painterResource(icons[i]), contentDescription = null, modifier = Modifier.size(30.dp)) },
-                    label = { Text(if (i == 0) "DP\nLogg" else title, textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.labelSmall, lineHeight = 13.sp, maxLines = 2) })
+                    label = { Text(if (i == 0) "DP Logg" else title, textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelSmall, maxLines = 1) })
             }
         } }
     ) { padding ->
@@ -327,15 +340,22 @@ private fun HomeScreen(data: AppData, showAll: Boolean, onShowAll: (Boolean) -> 
     val tour = data.tours.firstOrNull { it.id == data.activeTourId }
     val active = data.sessions.firstOrNull { it.endMillis == null }
     var selectedDelete by remember(tour?.id) { mutableStateOf<String?>(null) }
-    var transitioning by remember(tour?.id) { mutableStateOf(false) }
+    var transitioning by remember(tour?.id) { mutableStateOf("") }
+    var pendingStop by remember(tour?.id) { mutableStateOf<DpSession?>(null) }
     val context = LocalContext.current
     val motionDisabled = remember(context) { runCatching { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false) }
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(targetValue = if (pressed || transitioning) .95f else 1f,
-        animationSpec = tween(durationMillis = if (motionDisabled) 0 else 100), label = "Start DP press")
+    val depressed = pressed || transitioning.isNotEmpty()
+    val scale by animateFloatAsState(targetValue = if (depressed) .97f else 1f,
+        animationSpec = tween(durationMillis = if (motionDisabled) 0 else 100), label = "DP control press")
     LaunchedEffect(transitioning) {
-        if (transitioning) { delay(if (motionDisabled) 0L else 170L); transitioning = false }
+        if (transitioning.isNotEmpty()) {
+            delay(if (motionDisabled) 0L else 170L)
+            if (transitioning == "stop") pendingStop?.let { onEdit(it.id) }
+            pendingStop = null
+            transitioning = ""
+        }
     }
     val sessions = tour?.let { t -> data.sessions.filter { it.tourId == t.id }.sortedByDescending { it.startMillis } } ?: emptyList()
     if (showAll && tour != null) {
@@ -361,26 +381,61 @@ private fun HomeScreen(data: AppData, showAll: Boolean, onShowAll: (Boolean) -> 
         if (totals.provisional) Text("Provisional total until disembark date is entered", style = MaterialTheme.typography.bodySmall)
         if (totals.issue != null) Text(totals.issue, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(30.dp))
-        if (active == null || transitioning) {
-            Button(onClick = { if (!transitioning && active == null) { transitioning = true; onStart(tour) } },
-                enabled = !transitioning && active == null, interactionSource = interaction,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18805A), contentColor = Color.White,
-                    disabledContainerColor = Color(0xFF18805A), disabledContentColor = Color.White),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 7.dp, pressedElevation = 1.dp),
-                modifier = Modifier.fillMaxWidth().height(88.dp).graphicsLayer { scaleX = scale; scaleY = scale }
-                    .shadow(7.dp, RoundedCornerShape(48.dp))) {
-                Icon(painterResource(R.drawable.ic_dp_start), contentDescription = null, modifier = Modifier.size(30.dp))
-                Spacer(Modifier.width(12.dp))
-                Text("START DP", style = MaterialTheme.typography.headlineSmall)
-            }
-            OutlinedButton(onClick = { onAddManual(tour) }, modifier = Modifier.fillMaxWidth()) { Text("Record past DP session") }
-        } else {
-            Text("Recording since ${formatStamp(active.startMillis, tour.zoneId)}", style = MaterialTheme.typography.titleMedium)
-            if (active.tourId != tour.id) Text("Active session belongs to another tour. Select it before stopping.", color = MaterialTheme.colorScheme.error)
-            Button(onClick = { onStop(active) }, enabled = active.tourId == tour.id, modifier = Modifier.fillMaxWidth().height(88.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
-                Text("STOP DP", style = MaterialTheme.typography.headlineSmall)
+        val displayedActive = active ?: pendingStop
+        val showingStop = displayedActive != null && transitioning != "start"
+        Box(Modifier.fillMaxWidth().height(68.dp), contentAlignment = Alignment.CenterStart) {
+            if (showingStop) Column {
+                Text("Recording since ${formatStamp(displayedActive!!.startMillis, tour.zoneId)}",
+                    style = MaterialTheme.typography.titleMedium)
+                if (displayedActive.tourId != tour.id)
+                    Text("Active session belongs to another service period.", color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall)
             }
         }
+        val controlShape = RoundedCornerShape(48.dp)
+        val gradient = if (showingStop) {
+            if (depressed) listOf(Color(0xFFBB333B), Color(0xFFA5192C), Color(0xFF75111F))
+            else listOf(Color(0xFFF05A5D), Color(0xFFCD2336), Color(0xFF941323))
+        } else {
+            if (depressed) listOf(Color(0xFF15994D), Color(0xFF087D43), Color(0xFF055A36))
+            else listOf(Color(0xFF2BE46F), Color(0xFF08B251), Color(0xFF087545))
+        }
+        Button(
+            onClick = {
+                if (transitioning.isEmpty()) {
+                    if (showingStop && active != null && active.tourId == tour.id) {
+                        pendingStop = active
+                        transitioning = "stop"
+                        onStop(active) // Persist the stop timestamp before the visual transition.
+                    } else if (!showingStop && active == null) {
+                        transitioning = "start"
+                        onStart(tour) // Persist the start timestamp before the visual transition.
+                    }
+                }
+            },
+            enabled = transitioning.isEmpty() && (!showingStop || displayedActive?.tourId == tour.id),
+            interactionSource = interaction,
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White,
+                disabledContainerColor = Color.Transparent, disabledContentColor = Color.White),
+            contentPadding = PaddingValues(0.dp),
+            modifier = Modifier.fillMaxWidth().height(88.dp)
+                .graphicsLayer {
+                    scaleX = scale; scaleY = scale
+                    translationY = if (depressed) 2.dp.toPx() else 0f
+                }
+                .shadow(if (depressed) 2.dp else 8.dp, controlShape)
+                .clip(controlShape)
+                .background(Brush.verticalGradient(gradient), controlShape)
+                .border(1.dp, if (depressed) Color.White.copy(alpha = .18f) else Color.White.copy(alpha = .45f), controlShape)
+        ) {
+            Icon(painterResource(if (showingStop) R.drawable.ic_dp_stop else R.drawable.ic_dp_start),
+                contentDescription = null, modifier = Modifier.size(32.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(if (showingStop) "STOP DP" else "START DP",
+                style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        }
+        if (!showingStop) OutlinedButton(onClick = { onAddManual(tour) },
+            modifier = Modifier.fillMaxWidth()) { Text("Record past DP session") }
         HorizontalDivider()
         Text("Recent sessions", style = MaterialTheme.typography.titleLarge)
         sessions.take(8).forEach { s -> SessionCard(s, tour, data, selectedDelete,
@@ -825,8 +880,15 @@ private fun MeScreen(data: AppData, save: (AppData) -> Unit, onCertificate: () -
         Text("These choices are used for each new service period. You can change them there.", style = MaterialTheme.typography.bodySmall)
         HorizontalDivider()
         OutlinedCard(onClick = onCertificate, modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
-            Text("Certificate", style = MaterialTheme.typography.titleLarge)
-            Text(data.certificateNumber.ifBlank { "Add certificate details" })
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("Certificate", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.width(12.dp))
+                Text(data.certificateNumber.ifBlank { "Add number" },
+                    modifier = Modifier.weight(1f), textAlign = TextAlign.End,
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             if (data.certificateExpiry.isNotBlank()) Text("Expires ${displayDate(data.certificateExpiry)}", style = MaterialTheme.typography.bodyMedium)
             Text(CertificateRenewal.status(data.certificateExpiry), style = MaterialTheme.typography.titleSmall)
             CertificateRenewal.message(data.certificateExpiry).takeIf { it.isNotBlank() }?.let {
@@ -862,13 +924,15 @@ private fun AboutScreen(onClose: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onClose) { Text("Back to DPO") }
         Text("About DP Companion", style = MaterialTheme.typography.headlineSmall)
-        Text("Version 0.5.3", style = MaterialTheme.typography.titleMedium)
+        Text("Version 0.6.1", style = MaterialTheme.typography.titleMedium)
         Text("Developed with Torstein Sørdal, Master and Senior DPO, to make it easier to record DP sessions during work at sea and prepare accurate sea service summaries.")
         Text("Record start and stop times, correct entries later, manage vessels and service periods, save photos of supporting documents, track CPD/training and certificate validity, and export drafts for company verification.")
         Text("Your records and photos stay on this device unless you choose to export or share them. Export a backup regularly. The app works offline; opening NI certificate verification requires a connection.")
         Text("This is a personal working record. Confirm DP time against the vessel's records and the signed NI/IMCA logbook. A company confirmation letter is a draft until an authorised company representative verifies and signs it.")
         HorizontalDivider()
         Text("Changelog", style = MaterialTheme.typography.titleLarge)
+        Text("Version 0.6.1", style = MaterialTheme.typography.titleMedium)
+        Text("Gradient START and STOP controls with fixed position and pressed animation; blue gradient header and adaptive icon; one-line DP Logg label; clearer certificate card and sea background.")
         Text("Version 0.5.3", style = MaterialTheme.typography.titleMedium)
         Text("Edit or delete Sea Service periods; clearer certificate renewal text; system Back navigation; session time ranges; centered DP / Logg label; refreshed START DP control.")
         Text("Version 0.5.2", style = MaterialTheme.typography.titleMedium)

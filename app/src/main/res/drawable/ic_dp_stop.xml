@@ -4,7 +4,8 @@
     <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.4"
         android:fillColor="#00000000"
         android:pathData="M16,7 C10,7 5,12 5,18 C5,24 10,29 16,29 C22,29 27,24 27,18 C27,12 22,7 16,7 Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M12,14 L20,14 L20,22 L12,22 Z"/>
     <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.4"
         android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M16,18 L20,13 M16,18 L16,15 M13,3 L19,3 M16,3 L16,7 M24,6 L27,9"/>
+        android:pathData="M13,3 L19,3 M16,3 L16,7 M24,6 L27,9"/>
 </vector>
