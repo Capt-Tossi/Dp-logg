@@ -99,6 +99,12 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
     var meSection by remember { mutableIntStateOf(0) }
     var editId by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf("") }
+    LaunchedEffect(message) {
+        if (message.isNotBlank()) {
+            delay(3500L)
+            message = ""
+        }
+    }
     var reportChoice by remember { mutableStateOf(ReportLayout.SUMMARY) }
     var reportTours by remember { mutableStateOf(emptyList<Tour>()) }
     var reportDetails by remember { mutableStateOf(LetterDetails("", "", "", "")) }
@@ -195,7 +201,7 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
         topBar = { Surface(color = MaterialTheme.colorScheme.primary) { Text("DP Companion", modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(18.dp), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleLarge) } },
         bottomBar = { NavigationBar {
             val icons = listOf(R.drawable.nav_dp, R.drawable.nav_sea_service, R.drawable.nav_vessels, R.drawable.nav_me)
-            listOf("DP", "Sea Service", "My Vessels", "Me").forEachIndexed { i, title ->
+            listOf("DP", "Sea Service", "My Vessels", "DPO").forEachIndexed { i, title ->
                 NavigationBarItem(selected = page == i, onClick = { page = i; editId = null; meSection = 0 },
                     icon = { Image(painterResource(icons[i]), contentDescription = null, modifier = Modifier.size(30.dp)) }, label = { Text(title) })
             }
@@ -236,7 +242,7 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
                         takePhoto("certificate", "DP certificate", data.attachments.filter { it.ownerId == "certificate" && it.category == "DP certificate" }.maxByOrNull { it.createdAtMillis }?.id ?: "")
                     }, onOpenPhoto = ::viewPhoto, onDeletePhoto = { deleteAttachmentId = it.id }, onClose = { meSection = 0 })
                     2 -> Column(Modifier.fillMaxSize()) {
-                        TextButton(onClick = { meSection = 0 }) { Text("Back to Me") }
+                        TextButton(onClick = { meSection = 0 }) { Text("Back to DPO") }
                         Box(Modifier.weight(1f)) { CpdScreen(data, save, onPhoto = { owner -> takePhoto(owner, "CPD completion") }, onOpenPhoto = ::viewPhoto,
                             onReplacePhoto = ::replacePhoto, onDeletePhoto = { deleteAttachmentId = it.id }) }
                     }
@@ -614,7 +620,7 @@ private fun MeScreen(data: AppData, save: (AppData) -> Unit, onCertificate: () -
     val year = LocalDate.now().year
     val entries = data.cpd.count { it.completedDate.startsWith(year.toString()) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Me", style = MaterialTheme.typography.headlineSmall)
+        Text("DPO personal details", style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(data.fullName, { save(data.copy(fullName = it)) }, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(data.lastName, { save(data.copy(lastName = it)) }, label = { Text("Last name on certificate") }, modifier = Modifier.fillMaxWidth())
         OutlinedButton(onClick = { pickDate(context, data.dateOfBirth) { save(data.copy(dateOfBirth = it)) } }) { Text("Date of birth: ${data.dateOfBirth.ifBlank { "Choose date" }}") }
@@ -653,7 +659,7 @@ private fun MeScreen(data: AppData, save: (AppData) -> Unit, onCertificate: () -
 @Composable
 private fun AboutScreen(onClose: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        TextButton(onClick = onClose) { Text("Back to Me") }
+        TextButton(onClick = onClose) { Text("Back to DPO") }
         Text("About DP Companion", style = MaterialTheme.typography.headlineSmall)
         Text("Version 0.4", style = MaterialTheme.typography.titleMedium)
         Text("Developed with Torstein Sørdal, Master and Senior DPO, to make it easier to record DP sessions during work at sea and prepare accurate sea service summaries.")
@@ -681,7 +687,7 @@ private fun ExportScreen(data: AppData, onClose: () -> Unit,
     val letter = layout == ReportLayout.NEW_SCHEME || layout == ReportLayout.OLD_SCHEME || layout == ReportLayout.IMCA
     val issues = if (letter) ReportSelection.confirmationIssues(data, tours, layout, data.fullName, company, dob, grt) else emptyList()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        TextButton(onClick = onClose) { Text("Back to Me") }
+        TextButton(onClick = onClose) { Text("Back to DPO") }
         Text("Export", style = MaterialTheme.typography.headlineSmall)
         Text("Choose a vessel. All its service periods are included in the selected report.")
         ChoiceField("Vessel", selected?.tours?.firstOrNull()?.vessel ?: "", choices.map { it.tours.first().vessel }) { name ->
@@ -737,7 +743,7 @@ private fun CertificateScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (
     val photo = data.attachments.filter { it.ownerId == "certificate" && it.category == "DP certificate" }.maxByOrNull { it.createdAtMillis }
     var notice by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        TextButton(onClick = onClose) { Text("Back to Me") }
+        TextButton(onClick = onClose) { Text("Back to DPO") }
         Text("Certificate", style = MaterialTheme.typography.headlineSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { photo?.let { onOpenPhoto(it.fileName) } }, enabled = photo != null) { Text("View certificate") }
