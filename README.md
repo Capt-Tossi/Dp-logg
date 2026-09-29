@@ -16,9 +16,13 @@ Create a service period in **Sea Service**; enter the signed-on date and operati
 
 Version 0.5.1 centers the app title, frames photos with rounded corners, shows saved DP-system details and totals together in Sea Service, and adds a shorter long press and review-screen Delete action with confirmation. Continuous watch hours can be confirmed with the keyboard Done action. The DPO certificate view shows the six-calendar-month NI application window and offers an optional offline local reminder. For shuttle tankers, a separate scheme choice and DP loading/mooring activities help label records; the app does not calculate qualifying offshore loading operations or produce an NI Shuttle Tanker confirmation letter.
 
+Version 0.5.2 enlarges the launcher artwork and removes its white surrounding ring. No record format or DP calculation changed.
+
 The editable NI revalidation draft uses the current NI address, saved per-period vessel tonnage, a total DP-day figure and company verification/signature placeholders. New Scheme active dates remain a supporting breakdown; company records and the signed logbook must still be checked. The letter is not a certified NI document when exported.
 
 **Upgrade from v0.5:** This CI debug APK has a different signing certificate from v0.5, so Android will not install it as an update. Export a backup ZIP with photos to external storage, check that the ZIP is present, uninstall v0.5, install v0.5.1, restore the ZIP in DPO, and verify sessions and photos. Keep the ZIP until you have checked the restored data. A stable private signing key is still needed for seamless future updates.
+
+**Upgrade to v0.5.2:** CI debug signing is still not stable between builds. Export and verify a backup ZIP with photos outside the app before removing an earlier test version. Install v0.5.2, restore in DPO, and verify records and photos. Keep the ZIP until the restored data is checked.
 
 Version 0.4 added the maritime navigation and launcher icons, a subtle sea background, an About page, profile date of birth, sorted Sea Service cards with dates, explicit per-session review messages and EXIF-oriented vessel thumbnails. Backups retain compatibility with earlier schema versions.
 

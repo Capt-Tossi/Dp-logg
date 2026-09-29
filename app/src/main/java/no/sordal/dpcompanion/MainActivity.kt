@@ -751,7 +751,7 @@ private fun AboutScreen(onClose: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onClose) { Text("Back to DPO") }
         Text("About DP Companion", style = MaterialTheme.typography.headlineSmall)
-        Text("Version 0.5.1", style = MaterialTheme.typography.titleMedium)
+        Text("Version 0.5.2", style = MaterialTheme.typography.titleMedium)
         Text("Developed with Torstein Sørdal, Master and Senior DPO, to make it easier to record DP sessions during work at sea and prepare accurate sea service summaries.")
         Text("Record start and stop times, correct entries later, manage vessels and service periods, save photos of supporting documents, track CPD/training and certificate validity, and export drafts for company verification.")
         Text("Your records and photos stay on this device unless you choose to export or share them. Export a backup regularly. The app works offline; opening NI certificate verification requires a connection.")

@@ -2,6 +2,8 @@
 
 Version 0.5.1 was authorized and built. Record later requests here until the next explicit implementation request.
 
+Version 0.5.2 updates only the launcher icon: the white ring is removed and the blue DP artwork fills the Android icon mask. Other next-update feedback below remains pending.
+
 ## Included in v0.5.1 source and CI build
 
 - [x] Rename the bottom `Me` tab to `DPO`, the page heading to `DPO personal details`, and its back links to `Back to DPO`.
