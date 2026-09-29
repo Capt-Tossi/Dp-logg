@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+import java.net.URLEncoder
 import java.util.UUID
 
 data class Tour(
@@ -52,6 +53,17 @@ fun AppData.newTour(vessel: Vessel): Tour = Tour(
     vesselId = vessel.id, vessel = vessel.name, imo = vessel.imo, vesselType = vessel.type,
     dpClass = vessel.dpClass, rank = preferredRank, capacity = preferredCapacity
 )
+
+object NiVerification {
+    const val formUrl = "https://www.nialexisplatform.org/certification/dynamic-positioning/verify-dp-certificate/"
+    fun url(certificateNumber: String, lastName: String): String {
+        val number = certificateNumber.trim()
+        val surname = lastName.trim()
+        if (number.isEmpty() || surname.isEmpty()) return formUrl
+        val cid = URLEncoder.encode("$number-$surname", "UTF-8")
+        return "https://dp.nialexisplatform.org/VerifyCertificate/WebPage?code=1&cid=$cid"
+    }
+}
 
 data class TourTotals(val loggedHours: Int, val dpDays: Double?, val daysOnBoard: Long?, val issue: String?, val provisional: Boolean = false)
 

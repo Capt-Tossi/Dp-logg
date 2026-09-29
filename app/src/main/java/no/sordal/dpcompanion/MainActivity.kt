@@ -2,7 +2,6 @@ package no.sordal.dpcompanion
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -407,15 +406,13 @@ private fun CertificateScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (
         OutlinedButton(onClick = { pickDate(context, data.certificateExpiry) { save(data.copy(certificateExpiry = it)) } }) { Text("Certificate expiry: ${data.certificateExpiry.ifBlank { "Choose date" }}") }
         Text(if (remaining == null) "Enter certificate expiry date" else if (remaining < 0) "Expired ${-remaining} days ago" else "$remaining days to expire", style = MaterialTheme.typography.titleMedium)
         Button(onClick = {
-            if (data.certificateNumber.isNotBlank()) {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("Certificate number", data.certificateNumber))
-            }
             runCatching {
-                context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.nialexisplatform.org/certification/dynamic-positioning/verify-dp-certificate/")))
+                context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(NiVerification.url(data.certificateNumber, data.lastName))))
             }.onFailure { notice = "Could not open NI verification page" }
         }, modifier = Modifier.fillMaxWidth()) { Text("Check validity with NI") }
-        Text("The NI form requires certificate number and last name. The number is copied to your clipboard; paste it on the official page and enter your last name.", style = MaterialTheme.typography.bodySmall)
+        Text(if (data.certificateNumber.isBlank() || data.lastName.isBlank())
+            "Add certificate number here and last name under Me for direct verification. The official form opens until both are set."
+            else "Opens the NI certificate result using your saved number and last name.", style = MaterialTheme.typography.bodySmall)
         if (notice.isNotBlank()) Text(notice, color = MaterialTheme.colorScheme.error)
     }
 }

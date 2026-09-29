@@ -18,4 +18,4 @@ Version 0.2 adds **My Vessels**, a **Me** area with certificate and CPD / Traini
 
 To carry test data from v0.1 to v0.2 if Android rejects installation over the old debug build: export a backup ZIP from v0.1, save it outside the app, uninstall v0.1, install v0.2, then use **Me → Restore backup**. Verify the tour, CPD and photos after import. GitHub-generated debug APKs can be signed with different temporary keys between runs. Use sample data until a stable release signing setup and device QA are complete.
 
-The NI **Check validity** button opens the official certificate form and copies the certificate number to the clipboard. The form still requires pasting that number and entering the last name; no documented prefilled link is available.
+The NI **Check validity** button opens the certificate result directly when certificate number and last name are saved. It uses the certificate link format provided by a user of the NI service, percent-encoding the combined identifier. If either value is missing, the official verification form opens instead. The NI site remains the authority for certificate status.

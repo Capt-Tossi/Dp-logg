@@ -113,4 +113,15 @@ class DpMathTest {
         val old=Tour(vessel="Original Vessel",imo="1234567")
         assertEquals("Original Vessel",AppData().vesselName(old))
     }
+
+    @Test fun niLinkEncodesSurnameAndKeepsCertificateNumber() {
+        assertEquals(
+            "https://dp.nialexisplatform.org/VerifyCertificate/WebPage?code=1&cid=12345-S%C3%B8lv",
+            NiVerification.url(" 12345 "," Sølv ")
+        )
+    }
+
+    @Test fun niLinkFallsBackToOfficialFormIfDetailsAreMissing() {
+        assertEquals(NiVerification.formUrl,NiVerification.url("12345",""))
+    }
 }
