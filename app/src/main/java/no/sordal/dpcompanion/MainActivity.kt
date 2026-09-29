@@ -267,6 +267,18 @@ private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSessio
     val tour = data.tours.firstOrNull { it.id == data.activeTourId }
     val active = data.sessions.firstOrNull { it.endMillis == null }
     var selectedDelete by remember(tour?.id) { mutableStateOf<String?>(null) }
+    var showAll by remember(tour?.id) { mutableStateOf(false) }
+    val sessions = tour?.let { t -> data.sessions.filter { it.tourId == t.id && it.endMillis != null }.sortedByDescending { it.startMillis } } ?: emptyList()
+    if (showAll && tour != null) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item { TextButton(onClick = { showAll = false }) { Text("Back to recent sessions") } }
+            item { Text("All sessions (${sessions.size})", style = MaterialTheme.typography.titleLarge) }
+            items(sessions, key = { it.id }) { s -> SessionCard(s, tour, data, selectedDelete,
+                onSelectDelete = { selectedDelete = it }, onEdit = onEdit,
+                onDelete = { onDelete(it); selectedDelete = null }) }
+        }
+        return
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (tour == null) {
             Text("Set up a service period to begin", style = MaterialTheme.typography.headlineSmall)
@@ -292,34 +304,41 @@ private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSessio
         }
         HorizontalDivider()
         Text("Recent sessions", style = MaterialTheme.typography.titleLarge)
-        data.sessions.filter { it.tourId == tour.id && it.endMillis != null }.sortedByDescending { it.startMillis }.take(8).forEach { s ->
-            val status = ReportReview.sessionStatus(s, tour, data.sessions)
-            val tint = when (status) {
-                RecordStatus.OVERLAP -> Color(0xFFFFD9D7)
-                RecordStatus.INCOMPLETE -> Color(0xFFFFE3C2)
-                RecordStatus.OK -> Color(0xFFDDF3DF)
+        sessions.take(8).forEach { s -> SessionCard(s, tour, data, selectedDelete,
+            onSelectDelete = { selectedDelete = it }, onEdit = onEdit,
+            onDelete = { onDelete(it); selectedDelete = null }) }
+        if (sessions.size > 8) TextButton(onClick = { showAll = true }, modifier = Modifier.fillMaxWidth()) { Text("View all sessions (${sessions.size})") }
+    }
+}
+
+@Composable
+private fun SessionCard(s: DpSession, tour: Tour, data: AppData, selectedDelete: String?, onSelectDelete: (String) -> Unit,
+                        onEdit: (String) -> Unit, onDelete: (String) -> Unit) {
+    val status = ReportReview.sessionStatus(s, tour, data.sessions)
+    val tint = when (status) {
+        RecordStatus.OVERLAP -> Color(0xFFFFD9D7)
+        RecordStatus.INCOMPLETE -> Color(0xFFFFE3C2)
+        RecordStatus.OK -> Color(0xFFDDF3DF)
+    }
+    OutlinedCard(modifier = Modifier.fillMaxWidth().pointerInput(s.id) {
+        coroutineScope { while (true) {
+            awaitPointerEventScope { awaitFirstDown(requireUnconsumed = false) }
+            var longPressed = false
+            val timer = launch { delay(2000L); longPressed = true; onSelectDelete(s.id) }
+            val up = awaitPointerEventScope { waitForUpOrCancellation() }
+            timer.cancel()
+            if (up != null) { if (longPressed) up.consume() else onEdit(s.id) }
+        } }
+    }, colors = CardDefaults.outlinedCardColors(containerColor = tint)) {
+        Column(Modifier.padding(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("${if (status == RecordStatus.OK) "✓" else "!"}  ${formatStamp(s.startMillis, tour.zoneId)}", fontWeight = FontWeight.SemiBold)
+                if (selectedDelete == s.id) TextButton(onClick = { onDelete(s.id) }) { Text("🗑 Delete") }
             }
-            OutlinedCard(modifier = Modifier.fillMaxWidth().pointerInput(s.id) {
-                coroutineScope { while (true) {
-                    awaitPointerEventScope { awaitFirstDown(requireUnconsumed = false) }
-                    var longPressed = false
-                    val timer = launch { delay(2000L); longPressed = true; selectedDelete = s.id }
-                    val up = awaitPointerEventScope { waitForUpOrCancellation() }
-                    timer.cancel()
-                    if (up != null) { if (longPressed) up.consume() else onEdit(s.id) }
-                } }
-            }, colors = CardDefaults.outlinedCardColors(containerColor = tint)) {
-                Column(Modifier.padding(14.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("${if (status == RecordStatus.OK) "✓" else "!"}  ${formatStamp(s.startMillis, tour.zoneId)}", fontWeight = FontWeight.SemiBold)
-                        if (selectedDelete == s.id) TextButton(onClick = { onDelete(s.id); selectedDelete = null }) { Text("🗑 Delete") }
-                    }
-                    Text("${DpMath.loggedHours(s.startMillis, s.endMillis!!)} logged hours · ${s.activity.ifBlank { "Activity not set" }}")
-                    val photoCount = data.attachments.count { it.ownerId == s.id }
-                    if (photoCount > 0) Text("📎 $photoCount", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    ReportReview.sessionIssues(s, tour, data.sessions).forEach { Text(it) }
-                }
-            }
+            Text("${DpMath.loggedHours(s.startMillis, s.endMillis!!)} logged hours · ${s.activity.ifBlank { "Activity not set" }}")
+            val photoCount = data.attachments.count { it.ownerId == s.id }
+            if (photoCount > 0) Text("📎 $photoCount", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            ReportReview.sessionIssues(s, tour, data.sessions).filterNot { it == "Activity not set" && s.activity.isBlank() }.forEach { Text(it) }
         }
     }
 }
