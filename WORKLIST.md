@@ -21,6 +21,6 @@ Record new feedback here. Do not implement further changes or prepare another AP
 ## New feedback — awaiting authorization to implement
 
 - [ ] Session card: after a shorter long press (target about 1 second, to confirm during implementation), reveal the trash action inside a dark red filled button with clear contrast even on red overlap cards. Keep the existing delete confirmation.
-- [ ] Review session: place a Delete button to the right of Save session. It must use the same confirmation and delete the selected session only when confirmed.
+- [ ] Review session: place Delete below Save session, on the same row as Back (aligned to the right). It must use the same confirmation and delete the selected session only when confirmed.
 
 Add each new request here with its intended behavior and status before implementation.
