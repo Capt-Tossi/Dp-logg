@@ -44,6 +44,14 @@ Version 0.5.2 updated only the launcher icon: the white ring was removed and the
 - [x] Certificate renewal: calculate the opening of the renewal window as six calendar months before the entered expiry date. In the DPO certificate card and Certificate screen, clearly show `Renewal window open` once that date arrives, alongside the expiry date and days remaining. Keep the existing expired state distinct. NI Help/FAQ confirms the online revalidation application cannot be started more than six months before certificate expiry (for example, 23 July expiry opens 23 January): https://nialexisplatform.kayako.com/article/408-can-i-revalidate-my-certificate-before-the-expiry-date . This is the application opening date, not a deadline or a guarantee that all renewal requirements are met.
 - [x] Optional offline Android reminder for the certificate renewal window: schedule a local notification for the opening date, request notification permission only when the user enables reminders, and update/cancel the reminder when the expiry date changes or the certificate is renewed. The app must remain offline; no server push service is needed.
 
+## Next visual changes (requested 29 Sep 2026)
+
+- [ ] Show `DP Logg` on one centered line beneath the first bottom navigation icon, replacing the two-line label introduced in v0.5.3. Verify on a narrow phone and with larger system text.
+- [ ] Make START DP a green gradient control and STOP DP a matching red gradient control. Use the approved glossy, subtly beveled style with white stopwatch/stop symbols, equal dimensions, depth/shadow, and a brief pressed effect. Record timestamps immediately on tap.
+- [ ] Keep START DP and STOP DP at the exact same vertical position when recording starts. Reserve space for `Recording since` so the main control does not jump.
+- [ ] Give the header a dark-blue-to-clear-blue gradient matching the app icon, with centered white `DP Companion` in a clean bold sans-serif style.
+- [ ] Fix the launcher icon if the white circular background/ring still appears on the device. Use a full-blue adaptive icon with the DP artwork filling the icon safely, then verify on the device launcher.
+
 ## Remaining follow-up
 
 - [ ] Design and verify a separate Shuttle Tanker operation register and NI export using the applicable NI scheme; do not infer qualifying operations from individual DP sessions.
