@@ -1,8 +1,8 @@
 # DP Companion worklist
 
-Version 0.5.1 was authorized and built. Record later requests here until the next explicit implementation request.
+Version 0.5.3 was authorized and built. Record later requests here until the next explicit implementation request.
 
-Version 0.5.2 updates only the launcher icon: the white ring is removed and the blue DP artwork fills the Android icon mask. Other next-update feedback below remains pending.
+Version 0.5.2 updated only the launcher icon: the white ring was removed and the blue DP artwork fills the Android icon mask.
 
 ## Included in v0.5.1 source and CI build
 
@@ -20,16 +20,16 @@ Version 0.5.2 updates only the launcher icon: the white ring is removed and the 
 
 - [ ] Use a consistent private signing key for future test builds so updates can install over the existing app without an uninstall and restore. Keep the key out of the public repository.
 
-## Feedback for the next update (not implemented)
+## Included in v0.5.3 source and CI build
 
-- [ ] Allow editing the vessel associated with an existing Sea Service period. Show the chosen vessel and its details before saving, including how the period's saved vessel snapshot will change. Keep that period's sessions and documentation attached to the period. Editing a vessel in My Vessels should not silently rewrite historical periods.
-- [ ] Allow deleting a Sea Service period with a confirmation that clearly states the effect on its sessions and attached photos. Do not delete the vessel from My Vessels or affect other periods. Make the action available from the selected period's detail view.
-- [ ] Improve the certificate renewal card: give the renewal state its own clearly phrased line inside the card, with the date labelled in plain English (for example, `You can apply for renewal from 29 Mar 2026` or `Renewal applications are open`). Do not show an ambiguous `Open` beside an unexplained date. Retain the expiry date and countdown.
-- [ ] Rename the first bottom navigation label from `DP` to two lines: `DP` directly above `Logg`, with both words horizontally centered on the same axis under the icon. Check label, icon, and selection background alignment on a narrow phone. Keep the rest of the app's English text as requested.
-- [ ] Make Android system Back return to the previous in-app view, especially from Review session to the prior DP session list, matching the visible Back button. Handle nested DPO pages, View all sessions, image viewer and other detail states before leaving the app; only allow exit from the top-level screen. Preserve unsaved edits or warn before discarding them when relevant.
-- [ ] Show each completed session's time range directly on its colored card in Recent sessions and View all sessions. For Normal operating mode on the same calendar day, display start date and both times, e.g. `06 Sep 2026 10:10–15:10`; for Continuous mode display both start and stop dates and times. Also display the stop date whenever a Normal session crosses midnight so the range cannot be misunderstood. Keep hours, activity, status color, warning, and delete action legible on narrow screens. For an active session without a stop time, show its start with an `Ongoing` label instead of inventing a stop time.
-- [ ] Add an English `Changelog` section within the existing About DP Companion screen. Show the installed version and concise release notes by version, newest first, starting with accurate v0.5.2 (launcher icon) and v0.5.1 changes. Update it with each future APK so it lists only features actually shipped in that build; keep planned work out of the changelog. Make longer histories easy to read on a phone.
-- [ ] Redesign the primary `START DP` control in green with a fitting DP image/icon, subtle depth, and a brief pressed animation before it changes to the active `STOP DP` state. Keep the STOP control clearly distinct and readable. Timestamp START/STOP immediately on tap, independent of the visual animation, and prevent a rapid double tap from creating duplicate sessions. Respect reduced-motion settings and keep the button accessible on narrow phones.
+- [x] Allow editing the vessel associated with an existing Sea Service period. Show the chosen vessel and its details before saving, including how the period's saved vessel snapshot will change. Keep that period's sessions and documentation attached to the period. Editing a vessel in My Vessels should not silently rewrite historical periods.
+- [x] Allow deleting a Sea Service period with a confirmation that clearly states the effect on its sessions and attached photos. Do not delete the vessel from My Vessels or affect other periods. Make the action available from the selected period's detail view.
+- [x] Improve the certificate renewal card: give the renewal state its own clearly phrased line inside the card, with the date labelled in plain English (for example, `You can apply for renewal from 29 Mar 2026` or `Renewal applications are open`). Do not show an ambiguous `Open` beside an unexplained date. Retain the expiry date and countdown.
+- [x] Rename the first bottom navigation label from `DP` to two lines: `DP` directly above `Logg`, with both words horizontally centered on the same axis under the icon. Check label, icon, and selection background alignment on a narrow phone. Keep the rest of the app's English text as requested.
+- [x] Make Android system Back return to the previous in-app view, especially from Review session to the prior DP session list, matching the visible Back button. Handle nested DPO pages, View all sessions, image viewer and other detail states before leaving the app; only allow exit from the top-level screen. Preserve unsaved edits or warn before discarding them when relevant.
+- [x] Show each completed session's time range directly on its colored card in Recent sessions and View all sessions. For Normal operating mode on the same calendar day, display start date and both times, e.g. `06 Sep 2026 10:10–15:10`; for Continuous mode display both start and stop dates and times. Also display the stop date whenever a Normal session crosses midnight so the range cannot be misunderstood. Keep hours, activity, status color, warning, and delete action legible on narrow screens. For an active session without a stop time, show its start with an `Ongoing` label instead of inventing a stop time.
+- [x] Add an English `Changelog` section within the existing About DP Companion screen. Show the installed version and concise release notes by version, newest first, starting with accurate v0.5.2 (launcher icon) and v0.5.1 changes. Update it with each future APK so it lists only features actually shipped in that build; keep planned work out of the changelog. Make longer histories easy to read on a phone.
+- [x] Redesign the primary `START DP` control in green with a fitting DP image/icon, subtle depth, and a brief pressed animation before it changes to the active `STOP DP` state. Keep the STOP control clearly distinct and readable. Timestamp START/STOP immediately on tap, independent of the visual animation, and prevent a rapid double tap from creating duplicate sessions. Respect reduced-motion settings and keep the button accessible on narrow phones.
 
 ## v0.5.1 work
 
