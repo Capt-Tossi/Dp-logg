@@ -46,4 +46,30 @@ class ReportReviewTest {
         assertEquals(1,result.size)
         assertEquals(saved,result.first().tours.first())
     }
+
+    @Test fun orangeCardExplainsOutsideDatesAndMissingActivity() {
+        val s = DpSession(tourId="t",startMillis=at(27,8),endMillis=at(27,12),activity="")
+        val issues = ReportReview.sessionIssues(s,tour,listOf(s))
+        assertEquals(RecordStatus.INCOMPLETE,ReportReview.sessionStatus(s,tour,listOf(s)))
+        assertTrue(issues.contains("Activity not set"))
+        assertTrue(issues.any { it.contains("before signed on 2026-09-28") })
+    }
+
+    @Test fun exportedWordIncludesProfileBirthDateAndNiColumns() {
+        val session = DpSession(tourId="t",startMillis=at(28,8),endMillis=at(28,11),activity="Cargo transfer")
+        val data = AppData(tours=listOf(tour),sessions=listOf(session),fullName="Example Officer",dateOfBirth="1993-11-15")
+        val bytes = java.io.ByteArrayOutputStream()
+        ReportExport.writeDocx(data,listOf(tour),ReportLayout.NEW_SCHEME,LetterDetails("Example Co","","1993-11-15","2000"),bytes)
+        val zip = java.util.zip.ZipInputStream(bytes.toByteArray().inputStream())
+        var document = ""
+        zip.use { stream -> while (true) {
+            val entry = stream.nextEntry ?: break
+            if (entry.name == "word/document.xml") document = stream.readBytes().toString(Charsets.UTF_8)
+        } }
+        assertTrue(document.contains("Example Officer"))
+        assertTrue(document.contains("15 Nov 1993"))
+        assertTrue(document.contains("Active dates on DP"))
+        assertTrue(document.contains("28 Sep 2026"))
+        assertTrue(document.contains("GRT"))
+    }
 }

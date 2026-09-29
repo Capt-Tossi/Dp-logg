@@ -97,9 +97,10 @@ class Store(private val context: Context) {
     }
 
     private fun encode(data: AppData) = JSONObject().apply {
-        put("schema", 3); put("activeTourId", data.activeTourId); put("certificateNumber", data.certificateNumber)
+        put("schema", 4); put("activeTourId", data.activeTourId); put("certificateNumber", data.certificateNumber)
         put("certificateExpiry", data.certificateExpiry); put("certificateIssue", data.certificateIssue)
         put("cpd6Completed", data.cpd6Completed); put("fullName", data.fullName); put("lastName", data.lastName)
+        put("dateOfBirth", data.dateOfBirth)
         put("preferredRank", data.preferredRank); put("preferredCapacity", data.preferredCapacity)
         put("vessels", JSONArray().apply { data.vessels.forEach { v -> put(JSONObject().apply {
             put("id",v.id); put("name",v.name); put("imo",v.imo); put("type",v.type); put("dpClass",v.dpClass)
@@ -130,7 +131,7 @@ class Store(private val context: Context) {
     }
 
     private fun decode(j: JSONObject): AppData {
-        if (j.optInt("schema", 1) !in 1..3) error("Unsupported backup format")
+        if (j.optInt("schema", 1) !in 1..4) error("Unsupported backup format")
         val vessels = j.optJSONArray("vessels").objects().map { v -> Vessel(
             id=v.optString("id"), name=v.optString("name"), imo=v.optString("imo"),
             type=v.optString("type","PSV"), dpClass=v.optString("dpClass","DP2"),
@@ -168,7 +169,7 @@ class Store(private val context: Context) {
             fullName=j.optString("fullName"),lastName=j.optString("lastName"),
             preferredRank=j.optString("preferredRank","Master"),
             preferredCapacity=j.optString("preferredCapacity","Senior DPO / DP Master"),
-            certificateIssue=j.optString("certificateIssue"))
+            certificateIssue=j.optString("certificateIssue"), dateOfBirth=j.optString("dateOfBirth"))
     }
 }
 

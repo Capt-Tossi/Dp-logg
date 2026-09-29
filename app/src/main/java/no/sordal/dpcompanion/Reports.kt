@@ -9,37 +9,41 @@ enum class RecordStatus { OVERLAP, INCOMPLETE, OK }
 data class ReviewFinding(val sessionId: String?, val description: String)
 
 object ReportReview {
-    fun sessionStatus(session: DpSession, tour: Tour, sessions: List<DpSession>): RecordStatus {
+    fun sessionIssues(session: DpSession, tour: Tour, sessions: List<DpSession>): List<String> {
+        val issues = mutableListOf<String>()
         val end = session.endMillis
         if (end != null && end > session.startMillis && sessions.any { other ->
-                other.id != session.id && other.tourId == session.tourId &&
-                    other.endMillis != null && other.endMillis > other.startMillis &&
-                    session.startMillis < other.endMillis && other.startMillis < end
-            }) return RecordStatus.OVERLAP
-        if (end == null || end <= session.startMillis || session.activity.isBlank()) return RecordStatus.INCOMPLETE
-        val zone = runCatching { ZoneId.of(tour.zoneId) }.getOrDefault(ZoneId.systemDefault())
-        val first = runCatching { LocalDate.parse(tour.signedOn) }.getOrNull()
-        val last = runCatching { LocalDate.parse(tour.disembarked) }.getOrNull()
-        val from = Instant.ofEpochMilli(session.startMillis).atZone(zone).toLocalDate()
-        val to = Instant.ofEpochMilli(end - 1).atZone(zone).toLocalDate()
-        if (first == null || from.isBefore(first) || (last != null && to.isAfter(last))) return RecordStatus.INCOMPLETE
-        return RecordStatus.OK
+                other.id != session.id && other.tourId == session.tourId && other.endMillis != null &&
+                    other.endMillis > other.startMillis && session.startMillis < other.endMillis && other.startMillis < end
+            }) issues += "Overlapping session — review times"
+        if (end == null) issues += "Session still running"
+        else if (end <= session.startMillis) issues += "Stop must be after start"
+        if (session.activity.isBlank()) issues += "Activity not set"
+        if (end != null && end > session.startMillis) {
+            val zone = runCatching { ZoneId.of(tour.zoneId) }.getOrDefault(ZoneId.systemDefault())
+            val first = runCatching { LocalDate.parse(tour.signedOn) }.getOrNull()
+            val last = runCatching { LocalDate.parse(tour.disembarked) }.getOrNull()
+            val from = Instant.ofEpochMilli(session.startMillis).atZone(zone).toLocalDate()
+            val to = Instant.ofEpochMilli(end - 1).atZone(zone).toLocalDate()
+            if (first == null) issues += "Signed-on date missing"
+            else if (from.isBefore(first)) issues += "Outside service period: before signed on $first"
+            if (last != null && to.isAfter(last)) issues += "Outside service period: after disembarked $last"
+        }
+        return issues
+    }
+
+    fun sessionStatus(session: DpSession, tour: Tour, sessions: List<DpSession>): RecordStatus {
+        val issues = sessionIssues(session, tour, sessions)
+        return when {
+            issues.any { it.startsWith("Overlapping") } -> RecordStatus.OVERLAP
+            issues.isNotEmpty() -> RecordStatus.INCOMPLETE
+            else -> RecordStatus.OK
+        }
     }
 
     fun findings(tour: Tour, sessions: List<DpSession>): List<ReviewFinding> {
         val own = sessions.filter { it.tourId == tour.id }
-        val findings = own.mapNotNull { s ->
-            when (sessionStatus(s, tour, own)) {
-                RecordStatus.OVERLAP -> ReviewFinding(s.id, "Overlapping DP session")
-                RecordStatus.INCOMPLETE -> ReviewFinding(s.id, when {
-                    s.endMillis == null -> "Session still running"
-                    s.endMillis <= s.startMillis -> "Invalid session time"
-                    s.activity.isBlank() -> "Activity not set"
-                    else -> "Session outside service dates or signed-on date missing"
-                })
-                RecordStatus.OK -> null
-            }
-        }.toMutableList()
+        val findings = own.flatMap { s -> sessionIssues(s, tour, own).map { ReviewFinding(s.id, it) } }.toMutableList()
         if (tour.signedOn.isBlank()) findings += ReviewFinding(null, "Signed-on date missing")
         if (tour.disembarked.isBlank()) findings += ReviewFinding(null, "Disembarked date missing; totals are provisional")
         val totals = DpMath.totals(tour, own)
@@ -69,6 +73,7 @@ enum class ReportLayout(val title: String) {
     SUMMARY("Service period summary"),
     DETAILED("DP session report"),
     NEW_SCHEME("Confirmation letter — NI New Scheme"),
+    OLD_SCHEME("Confirmation letter — NI Old Scheme / Revalidation"),
     IMCA("Confirmation letter — IMCA logbook")
 }
 

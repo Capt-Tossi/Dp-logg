@@ -41,7 +41,7 @@ data class AppData(
     val cpd6Completed: Boolean = false,
     val vessels: List<Vessel> = emptyList(), val fullName: String = "", val lastName: String = "",
     val preferredRank: String = "Master", val preferredCapacity: String = "Senior DPO / DP Master",
-    val certificateIssue: String = ""
+    val certificateIssue: String = "", val dateOfBirth: String = ""
 )
 
 fun AppData.vesselName(tour: Tour): String = when {
@@ -91,7 +91,7 @@ object DpMath {
         if (completed.any { s ->
                 Instant.ofEpochMilli(s.startMillis).atZone(zone).toLocalDate().isBefore(signed) ||
                     Instant.ofEpochMilli(s.endMillis!! - 1).atZone(zone).toLocalDate().isAfter(left)
-            }) return TourTotals(hours, null, days, "Session outside tour dates")
+            }) return TourTotals(hours, null, days, "Session outside service period dates")
         val sorted = completed.sortedBy { it.startMillis }
         if (sorted.zipWithNext().any { (a, b) -> a.endMillis!! > b.startMillis })
             return TourTotals(hours, null, days, "Overlapping DP sessions need review")

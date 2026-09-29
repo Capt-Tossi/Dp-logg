@@ -5,6 +5,8 @@ import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,6 +15,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -20,6 +26,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,6 +44,7 @@ import java.time.*
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import kotlinx.coroutines.withTimeoutOrNull
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,9 +68,27 @@ private val activities = listOf("Cargo transfer", "Anchor handling (on DP)", "St
 private val ranks = listOf("Master", "Chief Officer", "Second Officer", "Third Officer", "Other")
 private val capacities = listOf("Senior DPO", "DPO", "Trainee DPO", "Senior DPO / DP Master", "Other")
 private val vesselTypes = listOf("PSV", "AHTS / AHV", "Shuttle tanker / buoy loading", "Diving support vessel", "ROV support vessel", "Construction vessel", "Cable-laying vessel", "Survey vessel", "Drillship", "Dredger", "Other")
-private val dpSystems = listOf("Kongsberg K-Pos", "NACOS DP Platinum", "Rolls-Royce Icon DP", "GE SeaStream DP", "ABB Marine Pilot Control", "Marine Technologies DP", "Navis DP", "Praxis Mega-Guard DP", "RH Marine Rhodium DPT", "SIREHNA DP", "Other")
-private val dateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy")
-private val stampFormat = DateTimeFormatter.ofPattern("dd MMM yyyy  HH:mm")
+private val dpSystems = listOf("Kongsberg K-Pos", "Kongsberg cPos", "Kongsberg SDP-11", "ICON DP (Rolls-Royce / Thrustmaster)", "Marine Technologies Bridge Mate", "Brunvoll BruCon DP", "Wärtsilä NACOS DP Platinum", "GE SeaStream DP", "ABB Marine Pilot Control", "Navis DP", "Other")
+private val dateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy", java.util.Locale.ENGLISH)
+private val stampFormat = DateTimeFormatter.ofPattern("dd MMM yyyy  HH:mm", java.util.Locale.ENGLISH)
+
+@Composable
+private fun SeaBackground() {
+    Canvas(Modifier.fillMaxSize()) {
+        val base = Path().apply {
+            moveTo(0f, size.height * .77f)
+            cubicTo(size.width * .3f, size.height * .72f, size.width * .67f, size.height * .84f, size.width, size.height * .76f)
+            lineTo(size.width, size.height); lineTo(0f, size.height); close()
+        }
+        drawPath(base, Color(0xFF85BAC6).copy(alpha = .07f))
+        val lower = Path().apply {
+            moveTo(0f, size.height * .88f)
+            cubicTo(size.width * .28f, size.height * .83f, size.width * .7f, size.height * .94f, size.width, size.height * .86f)
+            lineTo(size.width, size.height); lineTo(0f, size.height); close()
+        }
+        drawPath(lower, Color(0xFF417C9D).copy(alpha = .05f))
+    }
+}
 
 @Composable
 private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
@@ -71,6 +100,7 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
     var reportChoice by remember { mutableStateOf(ReportLayout.SUMMARY) }
     var reportTours by remember { mutableStateOf(emptyList<Tour>()) }
     var reportDetails by remember { mutableStateOf(LetterDetails("", "", "", "")) }
+    var deleteSessionId by remember { mutableStateOf<String?>(null) }
     var pendingOwner by rememberSaveable { mutableStateOf("") }
     var pendingCategory by rememberSaveable { mutableStateOf("") }
     var pendingFile by rememberSaveable { mutableStateOf("") }
@@ -111,15 +141,33 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
             context.contentResolver.openOutputStream(uri)?.use { ReportExport.writeCsv(data, reportTours, it) } ?: error("Cannot open file")
         }.onSuccess { message = "CSV saved" }.onFailure { message = "CSV export failed: ${it.message}" }
     }
+    val wordExport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) { uri ->
+        if (uri != null) runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { ReportExport.writeDocx(data, reportTours, reportChoice, reportDetails, it) } ?: error("Cannot open file")
+        }.onSuccess { message = "Word draft saved" }.onFailure { message = "Word export failed: ${it.message}" }
+    }
+    if (deleteSessionId != null) AlertDialog(onDismissRequest = { deleteSessionId = null },
+        title = { Text("Delete this DP session?") },
+        text = { Text("This removes the selected session and its logged hours. The change will be included in future backups and reports.") },
+        confirmButton = { TextButton(onClick = {
+            val id = deleteSessionId ?: return@TextButton
+            save(data.copy(sessions = data.sessions.filterNot { it.id == id }, attachments = data.attachments.filterNot { it.ownerId == id }))
+            deleteSessionId = null
+        }) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = { deleteSessionId = null }) { Text("Cancel") } })
     Scaffold(
         topBar = { Surface(color = MaterialTheme.colorScheme.primary) { Text("DP Companion", modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(18.dp), color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleLarge) } },
         bottomBar = { NavigationBar {
+            val icons = listOf(R.drawable.nav_dp, R.drawable.nav_sea_service, R.drawable.nav_vessels, R.drawable.nav_me)
             listOf("DP", "Sea Service", "My Vessels", "Me").forEachIndexed { i, title ->
-                NavigationBarItem(selected = page == i, onClick = { page = i; editId = null; meSection = 0 }, icon = { Text(listOf("●", "▤", "⚓", "◷")[i]) }, label = { Text(title) })
+                NavigationBarItem(selected = page == i, onClick = { page = i; editId = null; meSection = 0 },
+                    icon = { Image(painterResource(icons[i]), contentDescription = null, modifier = Modifier.size(30.dp)) }, label = { Text(title) })
             }
         } }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(padding)) {
+          SeaBackground()
+          Column(Modifier.fillMaxSize()) {
             if (message.isNotBlank()) Text(message, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.primary)
             when (page) {
                 0 -> if (editId != null) {
@@ -141,7 +189,7 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
                     val now = System.currentTimeMillis()
                     val session = DpSession(tourId = tour.id, startMillis = now - 3_600_000, endMillis = now)
                     save(data.copy(sessions = data.sessions + session)); editId = session.id
-                }, onTours = { page = 1 })
+                }, onTours = { page = 1 }, onDelete = { deleteSessionId = it })
                 1 -> ToursScreen(data, save, onPhoto = { owner -> takePhoto(owner, "DP checklist") }, onOpenPhoto = { openPhoto(context, it) }, onVessels = { page = 2 })
                 2 -> VesselsScreen(data, save, onPhoto = { owner -> takePhoto(owner, "Vessel photo") }, onOpenPhoto = { openPhoto(context, it) })
                 3 -> when (meSection) {
@@ -153,18 +201,24 @@ private fun CompanionApp(data: AppData, save: (AppData) -> Unit, store: Store) {
                     3 -> ExportScreen(data, onClose = { meSection = 0 }, onPdf = { tours, layout, details ->
                         reportTours = tours; reportChoice = layout; reportDetails = details
                         pdfExport.launch("dp-companion-${layout.name.lowercase()}.pdf")
+                    }, onWord = { tours, layout, details ->
+                        reportTours = tours; reportChoice = layout; reportDetails = details
+                        wordExport.launch("dp-companion-${layout.name.lowercase()}.docx")
                     }, onCsv = { tours -> reportTours = tours; csvExport.launch("dp-companion-sessions.csv") })
-                    else -> MeScreen(data, save, onCertificate = { meSection = 1 }, onCpd = { meSection = 2 }, onReport = { meSection = 3 }, onExport = { export.launch("dp-companion-backup.zip") }, onImport = { import.launch(arrayOf("application/zip", "application/octet-stream")) })
+                    4 -> AboutScreen { meSection = 0 }
+                    else -> MeScreen(data, save, onCertificate = { meSection = 1 }, onCpd = { meSection = 2 }, onReport = { meSection = 3 }, onAbout = { meSection = 4 }, onExport = { export.launch("dp-companion-backup.zip") }, onImport = { import.launch(arrayOf("application/zip", "application/octet-stream")) })
                 }
             }
+          }
         }
     }
 }
 
 @Composable
-private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSession) -> Unit, onEdit: (String) -> Unit, onAddManual: (Tour) -> Unit, onTours: () -> Unit) {
+private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSession) -> Unit, onEdit: (String) -> Unit, onAddManual: (Tour) -> Unit, onTours: () -> Unit, onDelete: (String) -> Unit) {
     val tour = data.tours.firstOrNull { it.id == data.activeTourId }
     val active = data.sessions.firstOrNull { it.endMillis == null }
+    var selectedDelete by remember(tour?.id) { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (tour == null) {
             Text("Set up a service period to begin", style = MaterialTheme.typography.headlineSmall)
@@ -174,7 +228,7 @@ private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSessio
         Text(data.vesselName(tour), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("IMO ${tour.imo.ifBlank { "—" }} · ${if (tour.mode == "Continuous DP") "Continuous" else "Normal"}")
         val totals = DpMath.totals(tour, data.sessions)
-        Text("${totals.loggedHours} logged DP hours  ·  ${totals.dpDays?.formatDays() ?: "—"} DP days", style = MaterialTheme.typography.titleMedium)
+        Text("${totals.loggedHours} logged DP hours  ·  ${totals.dpDays?.formatDays() ?: if (totals.loggedHours == 0) "0" else "—"} DP days", style = MaterialTheme.typography.titleMedium)
         if (totals.provisional) Text("Provisional total until disembark date is entered", style = MaterialTheme.typography.bodySmall)
         if (totals.issue != null) Text(totals.issue, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(30.dp))
@@ -197,11 +251,21 @@ private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSessio
                 RecordStatus.INCOMPLETE -> Color(0xFFFFE3C2)
                 RecordStatus.OK -> Color(0xFFDDF3DF)
             }
-            OutlinedCard(onClick = { onEdit(s.id) }, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.outlinedCardColors(containerColor = tint)) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth().pointerInput(s.id) {
+                awaitEachGesture { awaitPointerEventScope {
+                    awaitFirstDown(requireUnconsumed = false)
+                    val up = withTimeoutOrNull(2000L) { waitForUpOrCancellation() }
+                    if (up != null) onEdit(s.id)
+                    else { selectedDelete = s.id; waitForUpOrCancellation()?.consume() }
+                } }
+            }, colors = CardDefaults.outlinedCardColors(containerColor = tint)) {
                 Column(Modifier.padding(14.dp)) {
-                    Text("${if (status == RecordStatus.OK) "✓" else "!"}  ${formatStamp(s.startMillis, tour.zoneId)}", fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("${if (status == RecordStatus.OK) "✓" else "!"}  ${formatStamp(s.startMillis, tour.zoneId)}", fontWeight = FontWeight.SemiBold)
+                        if (selectedDelete == s.id) TextButton(onClick = { onDelete(s.id); selectedDelete = null }) { Text("🗑 Delete") }
+                    }
                     Text("${DpMath.loggedHours(s.startMillis, s.endMillis!!)} logged hours · ${s.activity.ifBlank { "Activity not set" }}")
-                    if (status == RecordStatus.OVERLAP) Text("Overlapping session — review times")
+                    ReportReview.sessionIssues(s, tour, data.sessions).forEach { Text(it) }
                 }
             }
         }
@@ -286,7 +350,16 @@ private fun VesselThumbnail(data: AppData, vesselId: String, size: Int = 90) {
             BitmapFactory.decodeFile(path, bounds)
             var sample = 1
             while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 512) sample *= 2
-            BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
+            val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+            val orientation = ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            val matrix = Matrix().apply { when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> postRotate(180f)
+                ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(270f)
+                ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> postScale(-1f, 1f)
+                ExifInterface.ORIENTATION_FLIP_VERTICAL -> postScale(1f, -1f)
+            } }
+            decoded?.let { android.graphics.Bitmap.createBitmap(it, 0, 0, it.width, it.height, matrix, true).asImageBitmap() }
         }.getOrNull() }
     }
     if (bitmap != null) Image(bitmap, contentDescription = "Vessel photo", contentScale = ContentScale.Crop,
@@ -310,7 +383,7 @@ private fun VesselsScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (Stri
     )
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("My Vessels", style = MaterialTheme.typography.headlineSmall)
-        Text("Save vessel details once, then select a vessel when creating a tour.")
+        Text("Save vessel details once, then select a vessel when creating a service period.")
         Button(onClick = { val v = Vessel(); save(data.copy(vessels = data.vessels + v)); selectedId = v.id; editing = true }) { Text("Add vessel") }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
             Column { data.vessels.forEach { v -> FilterChip(selected = v.id == selectedId,
@@ -364,7 +437,10 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
             }
             Button(onClick = { chosen?.let { v -> val t = data.newTour(v); save(data.copy(tours = data.tours + t, activeTourId = t.id)) } }, enabled = chosen != null && chosen.name.isNotBlank()) { Text("Add service period") }
         }
-        data.tours.forEach { t -> FilterChip(selected = t.id == data.activeTourId, onClick = { save(data.copy(activeTourId = t.id)) }, label = { Text(data.vesselName(t)) }) }
+        data.tours.sortedWith(compareByDescending<Tour> { it.signedOn }.thenByDescending { it.id }).forEach { t ->
+            FilterChip(selected = t.id == data.activeTourId, onClick = { save(data.copy(activeTourId = t.id)) },
+                label = { Column { Text(data.vesselName(t)); Text("${t.signedOn.ifBlank { "Date missing" }} – ${t.disembarked.ifBlank { "Ongoing" }}", style = MaterialTheme.typography.labelSmall) } })
+        }
         if (tour != null) {
             fun change(t: Tour) { save(data.copy(tours = data.tours.map { if (it.id == tour.id) t else it })) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
@@ -390,7 +466,7 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
             }
             if (tour.mode == "Continuous DP") OutlinedTextField(if (tour.dutyHours == 0.0) "" else tour.dutyHours.toString(), { change(tour.copy(dutyHours = it.toDoubleOrNull() ?: 0.0)) }, label = { Text("Watch period (hours)") }, modifier = Modifier.fillMaxWidth())
             val totals = DpMath.totals(tour, data.sessions)
-            Text("${totals.loggedHours} logged hours · ${totals.dpDays?.formatDays() ?: "—"} DP days")
+            Text("${totals.loggedHours} logged hours · ${totals.dpDays?.formatDays() ?: if (totals.loggedHours == 0) "0" else "—"} DP days")
             if (totals.provisional) Text("Provisional until disembarked date is entered", style = MaterialTheme.typography.bodySmall)
             if (totals.issue != null) Text(totals.issue, color = MaterialTheme.colorScheme.error)
             OutlinedButton(onClick = { onPhoto(tour.id) }) { Text("Photograph service checklist") }
@@ -429,7 +505,8 @@ private fun CpdScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String) 
 }
 
 @Composable
-private fun MeScreen(data: AppData, save: (AppData) -> Unit, onCertificate: () -> Unit, onCpd: () -> Unit, onReport: () -> Unit, onExport: () -> Unit, onImport: () -> Unit) {
+private fun MeScreen(data: AppData, save: (AppData) -> Unit, onCertificate: () -> Unit, onCpd: () -> Unit, onReport: () -> Unit, onAbout: () -> Unit, onExport: () -> Unit, onImport: () -> Unit) {
+    val context = LocalContext.current
     var confirmRestore by remember { mutableStateOf(false) }
     if (confirmRestore) AlertDialog(onDismissRequest = { confirmRestore = false },
         title = { Text("Restore backup?") },
@@ -444,6 +521,7 @@ private fun MeScreen(data: AppData, save: (AppData) -> Unit, onCertificate: () -
         Text("Me", style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(data.fullName, { save(data.copy(fullName = it)) }, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(data.lastName, { save(data.copy(lastName = it)) }, label = { Text("Last name on certificate") }, modifier = Modifier.fillMaxWidth())
+        OutlinedButton(onClick = { pickDate(context, data.dateOfBirth) { save(data.copy(dateOfBirth = it)) } }) { Text("Date of birth: ${data.dateOfBirth.ifBlank { "Choose date" }}") }
         OtherChoice("Shipboard rank", data.preferredRank, ranks) { save(data.copy(preferredRank = it)) }
         OtherChoice("DP capacity", data.preferredCapacity, capacities) { save(data.copy(preferredCapacity = it)) }
         Text("These choices are used for each new service period. You can change them there.", style = MaterialTheme.typography.bodySmall)
@@ -459,10 +537,10 @@ private fun MeScreen(data: AppData, save: (AppData) -> Unit, onCertificate: () -
         } }
         HorizontalDivider()
         Text("Sea Service overview", style = MaterialTheme.typography.titleLarge)
-        data.tours.forEach { t ->
+        data.tours.sortedByDescending { it.signedOn }.forEach { t ->
             val totals = DpMath.totals(t, data.sessions)
             Text(data.vesselName(t), style = MaterialTheme.typography.titleMedium)
-            Text("${totals.loggedHours} logged hours · ${totals.dpDays?.formatDays() ?: "—"} DP days")
+            Text("${t.signedOn.ifBlank { "Date missing" }} – ${t.disembarked.ifBlank { "Ongoing" }} · ${totals.loggedHours} h · ${totals.dpDays?.formatDays() ?: if (totals.loggedHours == 0) "0" else "—"} DP days")
             if (totals.provisional) Text("Provisional", style = MaterialTheme.typography.bodySmall)
             if (totals.issue != null) Text(totals.issue, color = MaterialTheme.colorScheme.error)
         }
@@ -472,12 +550,27 @@ private fun MeScreen(data: AppData, save: (AppData) -> Unit, onCertificate: () -
         OutlinedButton(onClick = { confirmRestore = true }, modifier = Modifier.fillMaxWidth()) { Text("Restore backup") }
         Text("Restoring replaces all records in this app. Export the current data first.", style = MaterialTheme.typography.bodySmall)
         Text("Personal working record. Copy verified totals into your signed NI/IMCA logbook.", style = MaterialTheme.typography.bodySmall)
+        TextButton(onClick = onAbout) { Text("About DP Companion") }
+    }
+}
+
+@Composable
+private fun AboutScreen(onClose: () -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        TextButton(onClick = onClose) { Text("Back to Me") }
+        Text("About DP Companion", style = MaterialTheme.typography.headlineSmall)
+        Text("Version 0.4", style = MaterialTheme.typography.titleMedium)
+        Text("Developed with Torstein Sørdal, Master and Senior DPO, to make it easier to record DP sessions during work at sea and prepare accurate sea service summaries.")
+        Text("Record start and stop times, correct entries later, manage vessels and service periods, save photos of supporting documents, track CPD/training and certificate validity, and export drafts for company verification.")
+        Text("Your records and photos stay on this device unless you choose to export or share them. Export a backup regularly. The app works offline; opening NI certificate verification requires a connection.")
+        Text("This is a personal working record. Confirm DP time against the vessel's records and the signed NI/IMCA logbook. A company confirmation letter is a draft until an authorised company representative verifies and signs it.")
     }
 }
 
 @Composable
 private fun ExportScreen(data: AppData, onClose: () -> Unit,
                          onPdf: (List<Tour>, ReportLayout, LetterDetails) -> Unit,
+                         onWord: (List<Tour>, ReportLayout, LetterDetails) -> Unit,
                          onCsv: (List<Tour>) -> Unit) {
     val context = LocalContext.current
     val choices = ReportSelection.vessels(data)
@@ -485,11 +578,11 @@ private fun ExportScreen(data: AppData, onClose: () -> Unit,
     var layout by remember { mutableStateOf(ReportLayout.SUMMARY) }
     var company by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-    var dob by remember { mutableStateOf("") }
+    var dob by remember { mutableStateOf(data.dateOfBirth) }
     var grt by remember { mutableStateOf("") }
     val selected = choices.firstOrNull { it.vesselId == selectedId }
     val tours = selected?.tours.orEmpty()
-    val letter = layout == ReportLayout.NEW_SCHEME || layout == ReportLayout.IMCA
+    val letter = layout == ReportLayout.NEW_SCHEME || layout == ReportLayout.OLD_SCHEME || layout == ReportLayout.IMCA
     val issues = if (letter) ReportSelection.confirmationIssues(data, tours, layout, data.fullName, company, dob, grt) else emptyList()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onClose) { Text("Back to Me") }
@@ -511,11 +604,12 @@ private fun ExportScreen(data: AppData, onClose: () -> Unit,
                 }
             }
             if (letter) {
-                ChoiceField("Letter layout", if (layout == ReportLayout.NEW_SCHEME) "NI New Scheme" else "IMCA logbook",
-                    listOf("NI New Scheme", "IMCA logbook")) { label ->
-                    layout = if (label == "NI New Scheme") ReportLayout.NEW_SCHEME else ReportLayout.IMCA
+                ChoiceField("Letter layout", when (layout) { ReportLayout.NEW_SCHEME -> "NI New Scheme"; ReportLayout.OLD_SCHEME -> "NI Old Scheme / Revalidation"; else -> "IMCA logbook draft" },
+                    listOf("NI New Scheme", "NI Old Scheme / Revalidation", "IMCA logbook draft")) { label ->
+                    layout = when (label) { "NI New Scheme" -> ReportLayout.NEW_SCHEME; "NI Old Scheme / Revalidation" -> ReportLayout.OLD_SCHEME; else -> ReportLayout.IMCA }
                 }
                 Text("Draft for employer verification. The company must check the figures and sign the letter.")
+                if (layout == ReportLayout.IMCA) Text("IMCA hours draft is not an NI confirmation-letter template. Select the matching NI scheme for an NI application.", color = Color(0xFFAF5200))
                 OutlinedTextField(company, { company = it }, label = { Text("Company name") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(address, { address = it }, label = { Text("Company address") }, modifier = Modifier.fillMaxWidth())
                 OutlinedButton(onClick = { pickDate(context, dob) { dob = it } }) { Text("Date of birth: ${dob.ifBlank { "Choose date" }}") }
@@ -525,13 +619,14 @@ private fun ExportScreen(data: AppData, onClose: () -> Unit,
             tours.forEach { tour ->
                 val totals = DpMath.totals(tour, data.sessions)
                 Text("${tour.vessel} · ${tour.signedOn.ifBlank { "Date missing" }} to ${tour.disembarked.ifBlank { "ongoing" }}")
-                Text("${totals.loggedHours} DP hours · ${totals.dpDays?.formatDays() ?: "—"} DP days · ${data.sessions.count { it.tourId == tour.id }} sessions")
+                Text("${totals.loggedHours} DP hours · ${totals.dpDays?.formatDays() ?: if (totals.loggedHours == 0) "0" else "—"} DP days · ${data.sessions.count { it.tourId == tour.id }} sessions")
                 ReportReview.findings(tour, data.sessions).forEach { finding ->
                     Text("! ${finding.description}", color = Color(0xFFAF5200))
                 }
             }
             if (issues.isNotEmpty()) issues.forEach { Text("! $it", color = MaterialTheme.colorScheme.error) }
-            Button(onClick = { onPdf(tours, layout, LetterDetails(company,address,dob,grt)) }, enabled = !letter || issues.isEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Save PDF") }
+            Button(onClick = { onWord(tours, layout, LetterDetails(company,address,dob,grt)) }, enabled = !letter || issues.isEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Save editable Word (.docx)") }
+            if (!letter) OutlinedButton(onClick = { onPdf(tours, layout, LetterDetails(company,address,dob,grt)) }, modifier = Modifier.fillMaxWidth()) { Text("Save PDF") }
             if (!letter) OutlinedButton(onClick = { onCsv(tours) }, modifier = Modifier.fillMaxWidth()) { Text("Save session CSV") }
         } else Text("Choose a vessel to preview its service periods.")
     }

@@ -78,7 +78,7 @@ class DpMathTest {
 
     @Test fun timeOutsideTourIsFlagged() {
         val s=DpSession(tourId="t",startMillis=time(28,1),endMillis=time(28,4))
-        assertEquals("Session outside tour dates",DpMath.totals(tour("Short operations"),listOf(s)).issue)
+        assertEquals("Session outside service period dates",DpMath.totals(tour("Short operations"),listOf(s)).issue)
     }
 
     @Test fun openTourShowsProvisionalDaysThroughToday() {
@@ -92,7 +92,7 @@ class DpMathTest {
         val s=DpSession(tourId="t",startMillis=time(30,0),endMillis=time(30,20))
         val result=DpMath.totals(tour("Continuous DP",left=""),listOf(s),LocalDate.of(2026,9,29))
         assertNull(result.dpDays)
-        assertEquals("Session outside tour dates",result.issue)
+        assertEquals("Session outside service period dates",result.issue)
     }
 
     @Test fun removingVesselKeepsHistoricalDpRecords() {
