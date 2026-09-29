@@ -22,5 +22,7 @@ Record new feedback here. Do not implement further changes or prepare another AP
 
 - [ ] Session card: after a shorter long press (target about 1 second, to confirm during implementation), reveal the trash action inside a dark red filled button with clear contrast even on red overlap cards. Keep the existing delete confirmation.
 - [ ] Review session: place Delete below Save session, on the same row as Back (aligned to the right). It must use the same confirmation and delete the selected session only when confirmed.
+- [ ] Certificate renewal: calculate the opening of the renewal window as six calendar months before the entered expiry date. In the DPO certificate card and Certificate screen, clearly show `Renewal window open` once that date arrives, alongside the expiry date and days remaining. Keep the existing expired state distinct. Verify the current NI wording before presenting the six-month date as an official eligibility rule.
+- [ ] Optional offline Android reminder for the certificate renewal window: schedule a local notification for the opening date, request notification permission only when the user enables reminders, and update/cancel the reminder when the expiry date changes or the certificate is renewed. The app must remain offline; no server push service is needed.
 
 Add each new request here with its intended behavior and status before implementation.
