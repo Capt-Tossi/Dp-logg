@@ -18,6 +18,9 @@ Record new feedback here. Do not implement further changes or prepare another AP
 
 - [ ] Use a consistent private signing key for future test builds so updates can install over the existing app without an uninstall and restore. Keep the key out of the public repository.
 
-## New feedback
+## New feedback — awaiting authorization to implement
+
+- [ ] Session card: after a shorter long press (target about 1 second, to confirm during implementation), reveal the trash action inside a dark red filled button with clear contrast even on red overlap cards. Keep the existing delete confirmation.
+- [ ] Review session: place a Delete button to the right of Save session. It must use the same confirmation and delete the selected session only when confirmed.
 
 Add each new request here with its intended behavior and status before implementation.
