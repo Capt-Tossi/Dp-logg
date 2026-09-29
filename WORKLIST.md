@@ -52,6 +52,9 @@ Version 0.5.2 updated only the launcher icon: the white ring was removed and the
 - [ ] Give the top header the app icon's dark-blue-to-clearer-blue gradient and discreet depth, without a glossy finish. Center high-contrast white `DP Companion` in a clean bold sans-serif style that visually matches the icon's DP lettering. Use blue as the app's primary visual profile, green for Start/OK, red for Stop/ending actions.
 - [ ] Use the selected icon design (option 8 without the gold arrow; source asset `app-icon.png` from the shared design chat). Replace the current square PNG launcher icon approach with an Android adaptive icon having separate background and foreground layers. Fill the entire masked background with the dark-blue gradient; place white `DP` and blue/cyan waves in a transparent foreground within Android's safe zone. No white circle/ring, separate blue square edge, or white background should remain. Verify circle/squircle masks on Pixel and another Android launcher if available.
 
+- [ ] DPO personal details: in the Certificate card, put the certificate number on the same header row as `Certificate` (for example, `Certificate                         37459`). Keep both aligned and readable on narrow screens; retain expiry, countdown and renewal information below. This uses the currently empty space in the card.
+- [ ] Increase the visibility of the subtle sea/wave background by five percentage points of opacity. The current two drawn layers use alpha 0.07 and 0.05; try 0.12 and 0.10 respectively, verify the effect across DPO, DP Logg, and Sea Service, and preserve text contrast.
+
 ## Remaining follow-up
 
 - [ ] Design and verify a separate Shuttle Tanker operation register and NI export using the applicable NI scheme; do not infer qualifying operations from individual DP sessions.
