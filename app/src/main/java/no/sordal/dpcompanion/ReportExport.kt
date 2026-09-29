@@ -138,7 +138,7 @@ object ReportExport {
         } else {
             lines(data, tours, layout, details).forEach { paragraph(it, it == "SEA SERVICE SUMMARY" || it == "DP SESSION REPORT") }
         }
-        val document = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>$body<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1000" w:right="850" w:bottom="1000" w:left="850"/></w:sectPr></w:body></w:document>"""
+        val document = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>$body<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1000" w:right="850" w:bottom="1000" w:left="850"/></w:sectPr></w:body></w:document>"""
         ZipOutputStream(output).use { zip ->
             fun entry(name: String, contents: String) {
                 zip.putNextEntry(ZipEntry(name)); zip.write(contents.toByteArray(Charsets.UTF_8)); zip.closeEntry()
