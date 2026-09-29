@@ -97,10 +97,10 @@ class Store(private val context: Context) {
     }
 
     private fun encode(data: AppData) = JSONObject().apply {
-        put("schema", 4); put("activeTourId", data.activeTourId); put("certificateNumber", data.certificateNumber)
+        put("schema", 5); put("activeTourId", data.activeTourId); put("certificateNumber", data.certificateNumber)
         put("certificateExpiry", data.certificateExpiry); put("certificateIssue", data.certificateIssue)
         put("cpd6Completed", data.cpd6Completed); put("fullName", data.fullName); put("lastName", data.lastName)
-        put("dateOfBirth", data.dateOfBirth)
+        put("dateOfBirth", data.dateOfBirth); put("renewalReminderEnabled", data.renewalReminderEnabled)
         put("preferredRank", data.preferredRank); put("preferredCapacity", data.preferredCapacity)
         put("vessels", JSONArray().apply { data.vessels.forEach { v -> put(JSONObject().apply {
             put("id",v.id); put("name",v.name); put("imo",v.imo); put("type",v.type); put("dpClass",v.dpClass)
@@ -111,6 +111,7 @@ class Store(private val context: Context) {
             put("dpClass",t.dpClass); put("rank",t.rank); put("capacity",t.capacity)
             put("signedOn",t.signedOn); put("disembarked",t.disembarked); put("mode",t.mode)
             put("dutyHours",t.dutyHours); put("zoneId",t.zoneId); put("vesselId",t.vesselId)
+            put("dpSystem",t.dpSystem); put("grossTonnage",t.grossTonnage); put("scheme",t.scheme)
         }) } })
         put("sessions", JSONArray().apply { data.sessions.forEach { s -> put(JSONObject().apply {
             put("id",s.id); put("tourId",s.tourId); put("startMillis",s.startMillis); put("endMillis",s.endMillis)
@@ -131,7 +132,7 @@ class Store(private val context: Context) {
     }
 
     private fun decode(j: JSONObject): AppData {
-        if (j.optInt("schema", 1) !in 1..4) error("Unsupported backup format")
+        if (j.optInt("schema", 1) !in 1..5) error("Unsupported backup format")
         val vessels = j.optJSONArray("vessels").objects().map { v -> Vessel(
             id=v.optString("id"), name=v.optString("name"), imo=v.optString("imo"),
             type=v.optString("type","PSV"), dpClass=v.optString("dpClass","DP2"),
@@ -143,8 +144,13 @@ class Store(private val context: Context) {
             rank=t.optString("rank","Master"), capacity=t.optString("capacity","Senior DPO / DP Master"),
             signedOn=t.optString("signedOn"), disembarked=t.optString("disembarked"),
             mode=t.optString("mode","Short operations"), dutyHours=t.optDouble("dutyHours",0.0),
-            zoneId=t.optString("zoneId",java.time.ZoneId.systemDefault().id), vesselId=t.optString("vesselId")
-        ) }
+            zoneId=t.optString("zoneId",java.time.ZoneId.systemDefault().id), vesselId=t.optString("vesselId"),
+            dpSystem=t.optString("dpSystem"), grossTonnage=t.optString("grossTonnage"), scheme=t.optString("scheme","Offshore DP")
+        ) }.map { tour ->
+            val linked = vessels.firstOrNull { it.id == tour.vesselId }
+            tour.copy(dpSystem = tour.dpSystem.ifBlank { linked?.dpSystem.orEmpty() },
+                grossTonnage = tour.grossTonnage.ifBlank { linked?.grossTonnage.orEmpty() })
+        }
         val sessions = j.optJSONArray("sessions").objects().map { s -> DpSession(
             id=s.optString("id"), tourId=s.optString("tourId"), startMillis=s.optLong("startMillis"),
             endMillis=s.longOrNull("endMillis"), activity=s.optString("activity"),
@@ -169,7 +175,8 @@ class Store(private val context: Context) {
             fullName=j.optString("fullName"),lastName=j.optString("lastName"),
             preferredRank=j.optString("preferredRank","Master"),
             preferredCapacity=j.optString("preferredCapacity","Senior DPO / DP Master"),
-            certificateIssue=j.optString("certificateIssue"), dateOfBirth=j.optString("dateOfBirth"))
+            certificateIssue=j.optString("certificateIssue"), dateOfBirth=j.optString("dateOfBirth"),
+            renewalReminderEnabled=j.optBoolean("renewalReminderEnabled",false))
     }
 }
 

@@ -96,7 +96,7 @@ class DpMathTest {
     }
 
     @Test fun removingVesselKeepsHistoricalDpRecords() {
-        val vessel=Vessel(id="v1",name="Example Ship",imo="1234567",type="AHTS",dpClass="DP2")
+        val vessel=Vessel(id="v1",name="Example Ship",imo="1234567",type="AHTS",dpClass="DP2",dpSystem="Kongsberg K-Pos",grossTonnage="3997")
         val initial=AppData(vessels=listOf(vessel),preferredRank="Master",preferredCapacity="Senior DPO")
         val t=initial.newTour(vessel).copy(id="t",signedOn="2026-09-29",disembarked="2026-10-26")
         val s=DpSession(tourId=t.id,startMillis=time(29,0),endMillis=time(29,3))
@@ -107,6 +107,8 @@ class DpMathTest {
         assertEquals("1234567",t.imo)
         assertEquals("Master",t.rank)
         assertEquals("Senior DPO",t.capacity)
+        assertEquals("Kongsberg K-Pos",t.dpSystem)
+        assertEquals("3997",t.grossTonnage)
     }
 
     @Test fun legacyTourStillDisplaysItsSavedVessel() {
@@ -123,5 +125,11 @@ class DpMathTest {
 
     @Test fun niLinkFallsBackToOfficialFormIfDetailsAreMissing() {
         assertEquals(NiVerification.formUrl,NiVerification.url("12345",""))
+    }
+
+    @Test fun renewalWindowUsesCalendarMonthsAndKeepsExpiredDistinct() {
+        assertEquals(LocalDate.of(2030,12,28),CertificateRenewal.openingDate("2031-06-28"))
+        assertEquals("Renewal window open · 182 days to expire",CertificateRenewal.status("2031-06-28",LocalDate.of(2030,12,28)))
+        assertEquals("Expired 1 day ago",CertificateRenewal.status("2031-06-28",LocalDate.of(2031,6,29)))
     }
 }

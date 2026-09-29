@@ -37,7 +37,7 @@ class ReportReviewTest {
         assertEquals(listOf(LocalDate.of(2026,9,28)),ReportReview.activeDates(tour,listOf(a)))
         val continuous = tour.copy(mode="Continuous DP",dutyHours=2.0)
         assertTrue(ReportSelection.confirmationIssues(AppData(sessions=listOf(a)),listOf(continuous),ReportLayout.NEW_SCHEME,"A B","Co","1990-01-01","1000")
-            .any { it.contains("choose IMCA") })
+            .any { it.contains("IMCA draft") })
     }
 
     @Test fun deletedCatalogVesselStillAppearsForExport() {
@@ -68,8 +68,48 @@ class ReportReviewTest {
         } }
         assertTrue(document.contains("Example Officer"))
         assertTrue(document.contains("15 Nov 1993"))
-        assertTrue(document.contains("Active dates on DP"))
+        assertTrue(document.contains("Supporting active date breakdown"))
         assertTrue(document.contains("28 Sep 2026"))
         assertTrue(document.contains("GRT"))
+        assertTrue(document.contains("200B Lambeth Road"))
+        assertTrue(document.contains("Total claimed DP sea time: 1 days"))
+    }
+
+    @Test fun twoVesselsKeepDistinctGrossTonnageInDraft() {
+        val a = tour.copy(id="a",vessel="One",grossTonnage="3997",vesselId="v1")
+        val b = tour.copy(id="b",vessel="Two",imo="7654321",grossTonnage="5012",vesselId="v2")
+        val sa = DpSession(tourId="a",startMillis=at(28,8),endMillis=at(28,11),activity="Cargo transfer")
+        val sb = sa.copy(id="sb",tourId="b")
+        val data = AppData(tours=listOf(a,b),sessions=listOf(sa,sb),fullName="Example Officer")
+        val bytes = java.io.ByteArrayOutputStream()
+        ReportExport.writeDocx(data,listOf(a,b),ReportLayout.NEW_SCHEME,LetterDetails("Example Co","","1993-11-15",""),bytes)
+        var xml = ""
+        java.util.zip.ZipInputStream(bytes.toByteArray().inputStream()).use { stream ->
+            while (true) { val entry = stream.nextEntry ?: break
+                if (entry.name == "word/document.xml") xml = stream.readBytes().toString(Charsets.UTF_8) }
+        }
+        assertTrue(xml.contains("3997"))
+        assertTrue(xml.contains("5012"))
+        assertTrue(xml.contains("Total claimed DP sea time: 2 days"))
+    }
+
+    @Test fun multipleServicePeriodsOfOneVesselKeepDatesAndTotals() {
+        val first = tour.copy(id="first",vesselId="v",grossTonnage="3997")
+        val second = tour.copy(id="second",vesselId="v",signedOn="2026-09-01",disembarked="2026-09-07",grossTonnage="3997")
+        val a = DpSession(tourId="first",startMillis=at(28,8),endMillis=at(28,11),activity="Cargo transfer")
+        val b = DpSession(tourId="second",startMillis=at(1,8),endMillis=at(1,11),activity="Cargo transfer")
+        val data = AppData(tours=listOf(first,second),sessions=listOf(a,b),fullName="Example Officer")
+        assertEquals(2,ReportSelection.vessels(data).single().tours.size)
+        assertTrue(ReportSelection.confirmationIssues(data,listOf(first,second),ReportLayout.NEW_SCHEME,"Example Officer","Example Co","1993-11-15","").isEmpty())
+        val out = java.io.ByteArrayOutputStream()
+        ReportExport.writeDocx(data,listOf(first,second),ReportLayout.NEW_SCHEME,LetterDetails("Example Co","","1993-11-15",""),out)
+        var xml = ""
+        java.util.zip.ZipInputStream(out.toByteArray().inputStream()).use { z -> while (true) {
+            val entry = z.nextEntry ?: break
+            if (entry.name == "word/document.xml") xml = z.readBytes().toString(Charsets.UTF_8)
+        } }
+        assertTrue(xml.contains("01 Sep 2026"))
+        assertTrue(xml.contains("28 Sep 2026"))
+        assertTrue(xml.contains("Total claimed DP sea time: 2 days"))
     }
 }

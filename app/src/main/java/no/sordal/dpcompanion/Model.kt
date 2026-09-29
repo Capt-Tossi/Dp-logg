@@ -14,7 +14,8 @@ data class Tour(
     val signedOn: String = "", val disembarked: String = "",
     val mode: String = "Short operations", val dutyHours: Double = 0.0,
     val zoneId: String = ZoneId.systemDefault().id,
-    val vesselId: String = ""
+    val vesselId: String = "", val dpSystem: String = "", val grossTonnage: String = "",
+    val scheme: String = "Offshore DP"
 )
 
 data class Vessel(
@@ -41,7 +42,8 @@ data class AppData(
     val cpd6Completed: Boolean = false,
     val vessels: List<Vessel> = emptyList(), val fullName: String = "", val lastName: String = "",
     val preferredRank: String = "Master", val preferredCapacity: String = "Senior DPO / DP Master",
-    val certificateIssue: String = "", val dateOfBirth: String = ""
+    val certificateIssue: String = "", val dateOfBirth: String = "",
+    val renewalReminderEnabled: Boolean = false
 )
 
 fun AppData.vesselName(tour: Tour): String = when {
@@ -52,8 +54,22 @@ fun AppData.vesselName(tour: Tour): String = when {
 
 fun AppData.newTour(vessel: Vessel): Tour = Tour(
     vesselId = vessel.id, vessel = vessel.name, imo = vessel.imo, vesselType = vessel.type,
-    dpClass = vessel.dpClass, rank = preferredRank, capacity = preferredCapacity
+    dpClass = vessel.dpClass, dpSystem = vessel.dpSystem, grossTonnage = vessel.grossTonnage,
+    rank = preferredRank, capacity = preferredCapacity
 )
+
+object CertificateRenewal {
+    fun openingDate(expiry: String): LocalDate? = runCatching { LocalDate.parse(expiry).minusMonths(6) }.getOrNull()
+    fun status(expiry: String, today: LocalDate = LocalDate.now()): String {
+        val date = runCatching { LocalDate.parse(expiry) }.getOrNull() ?: return "Set expiry date"
+        val days = ChronoUnit.DAYS.between(today, date)
+        return when {
+            days < 0 -> "Expired ${-days} ${if (days == -1L) "day" else "days"} ago"
+            !today.isBefore(date.minusMonths(6)) -> "Renewal window open · $days days to expire"
+            else -> "$days days to expire · Opens ${date.minusMonths(6)}"
+        }
+    }
+}
 
 object NiVerification {
     const val formUrl = "https://www.nialexisplatform.org/certification/dynamic-positioning/verify-dp-certificate/"

@@ -41,7 +41,7 @@ object ReportExport {
         tours.sortedBy { it.signedOn }.forEach { tour ->
             val sessions = data.sessions.filter { it.tourId == tour.id }.sortedBy { it.startMillis }
             val totals = DpMath.totals(tour, data.sessions)
-            result += "Vessel: ${tour.vessel}  |  IMO: ${tour.imo}  |  ${tour.dpClass}  |  GT: ${details.grossTonnage.ifBlank { "—" }}"
+            result += "Vessel: ${tour.vessel}  |  IMO: ${tour.imo}  |  ${tour.dpClass}  |  GT: ${tour.grossTonnage.ifBlank { details.grossTonnage.ifBlank { "—" } }}"
             result += "Signed on: ${pretty(tour.signedOn)}  |  Disembarked: ${pretty(tour.disembarked)}"
             result += "Rank: ${tour.rank}  |  DP capacity: ${tour.capacity}"
             result += "DP mode: ${if (tour.mode == "Continuous DP") "Continuous" else "Normal"}"
@@ -114,27 +114,28 @@ object ReportExport {
             paragraph(details.company.ifBlank { "[Company headed paper]" })
             if (details.companyAddress.isNotBlank()) paragraph(details.companyAddress)
             paragraph(pretty(LocalDate.now().toString()))
-            paragraph("DP Department, The Nautical Institute, 202 Lambeth Road, London SE1 7LQ, United Kingdom")
-            paragraph("Application for Revalidation of a DP Certificate — Offshore ${if (layout == ReportLayout.NEW_SCHEME) "New" else "Old"} Scheme", true)
+            paragraph("DP Department, The Nautical Institute, 200B Lambeth Road, London SE1 7JY, United Kingdom")
+            paragraph("Application for the Revalidation of a DP Certificate", true)
             paragraph("We hereby certify that ${data.fullName} (DOB: ${pretty(details.dateOfBirth)}) is employed by ${details.company} as a ${tours.firstOrNull()?.rank.orEmpty()} / ${tours.firstOrNull()?.capacity.orEmpty()} on board our vessels.")
-            paragraph("The company must check the DP sea time below against vessel deck logs, DP logs and its own records before signing. Only active DP time is claimed for revalidation.")
-            if (layout == ReportLayout.NEW_SCHEME) paragraph("For each listed active date on DP, the applicant performed DP duties for a minimum of two hours. The dates are broken down by individual service period.")
-            else paragraph("The days on DP below are listed by individual service period. For revalidation after 1 January 2015, confirm at least two hours on DP per claimed day.")
+            paragraph("[Company to confirm after checking vessel deck logs, DP logs and internal records:] The entries below represent active DP sea time performed as a DPO for at least two hours on each day claimed. The individual service periods are listed separately.")
             val headers = listOf("Vessel name", "GRT", "IMO No.", "DP class", "From", "To", "Days on DP", "Rank")
             val rows = tours.sortedBy { it.signedOn }.map { t ->
                 val total = DpMath.totals(t, data.sessions)
-                listOf(t.vessel, details.grossTonnage, t.imo, t.dpClass, pretty(t.signedOn), pretty(t.disembarked), total.dpDays?.let { if (it % 1.0 == 0.0) it.toInt().toString() else "%.2f".format(java.util.Locale.US, it) } ?: "REVIEW", t.rank)
+                listOf(t.vessel, t.grossTonnage.ifBlank { details.grossTonnage }, t.imo, t.dpClass, pretty(t.signedOn), pretty(t.disembarked), total.dpDays?.let { if (it % 1.0 == 0.0) it.toInt().toString() else "%.2f".format(java.util.Locale.US, it) } ?: "REVIEW", t.rank)
             }
             table(headers, rows)
+            val totalDays = tours.sumOf { DpMath.totals(it, data.sessions).dpDays ?: 0.0 }
+            paragraph("Total claimed DP sea time: ${if (totalDays % 1.0 == 0.0) totalDays.toInt().toString() else "%.2f".format(java.util.Locale.US, totalDays)} days. Company verification required.")
             if (layout == ReportLayout.NEW_SCHEME) tours.sortedBy { it.signedOn }.forEach { t ->
-                paragraph("Active dates on DP — ${t.vessel}, ${pretty(t.signedOn)} to ${pretty(t.disembarked)}:", true)
+                paragraph("Supporting active date breakdown (company to verify) — ${t.vessel}, ${pretty(t.signedOn)} to ${pretty(t.disembarked)}:", true)
                 paragraph(ReportReview.activeDates(t, data.sessions).joinToString(", ") { pretty(it.toString()) }.ifBlank { "None recorded" })
-                paragraph("Passive dates on DP: [Company to confirm, if applicable]")
             }
             paragraph("This letter is provided in support of the applicant's DP certificate revalidation.")
             paragraph("Yours faithfully")
-            paragraph("[Signatory's name and job title]  [Direct contact details]")
-            paragraph("[Signature and company stamp]  [Date]")
+            paragraph("[Operations Manager / Marine Superintendent or equivalent operational signatory: full name and job title]")
+            paragraph("[Direct company email and contact details]")
+            paragraph("[Original ink signature and company stamp]  [Date of signature]")
+            paragraph("Transfer to original company headed paper before signature. Applicant-generated draft only.")
         } else {
             lines(data, tours, layout, details).forEach { paragraph(it, it == "SEA SERVICE SUMMARY" || it == "DP SESSION REPORT") }
         }

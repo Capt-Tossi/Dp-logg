@@ -89,13 +89,17 @@ object ReportSelection {
         if (fullName.isBlank()) issues += "Full name is required"
         if (company.isBlank()) issues += "Company name is required"
         if (runCatching { LocalDate.parse(dob) }.isFailure) issues += "Date of birth is required"
-        if (grt.isBlank()) issues += "Gross tonnage is required"
         if (tours.isEmpty()) issues += "Select a vessel"
         tours.forEach { t ->
             if (t.imo.isBlank()) issues += "IMO number missing for ${t.vessel}"
+            if ((t.grossTonnage.ifBlank { grt }).toDoubleOrNull()?.let { it > 0 } != true) issues += "Gross tonnage missing for ${t.vessel}"
             if (ReportReview.findings(t, data.sessions).isNotEmpty()) issues += "Review ${t.vessel} (${t.signedOn}) before drafting a letter"
-            if (layout == ReportLayout.NEW_SCHEME && t.mode == "Continuous DP") issues += "New Scheme date layout needs individual DP days; choose IMCA layout for continuous-hour records"
-            if (DpMath.totals(t, data.sessions).dpDays == null) issues += "DP days cannot be calculated for ${t.vessel}"
+            if (t.scheme == "Shuttle tanker (restricted)" && layout != ReportLayout.IMCA) issues += "Shuttle tanker loading operations need separate company verification and template"
+            if (layout != ReportLayout.IMCA && t.mode == "Continuous DP") issues += "NI letter needs individually verified DP days; use a reviewed IMCA draft for continuous-hour records"
+            val total = DpMath.totals(t, data.sessions).dpDays
+            if (total == null) issues += "DP days cannot be calculated for ${t.vessel}"
+            else if (layout == ReportLayout.NEW_SCHEME && total != ReportReview.activeDates(t, data.sessions).size.toDouble())
+                issues += "DP-day total does not match qualifying dates for ${t.vessel}"
         }
         return issues.distinct()
     }

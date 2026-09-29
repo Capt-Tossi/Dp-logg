@@ -10,8 +10,8 @@ android {
         applicationId = "no.sordal.dpcompanion"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.5"
+        versionCode = 7
+        versionName = "0.5.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes { release { isMinifyEnabled = false } }
