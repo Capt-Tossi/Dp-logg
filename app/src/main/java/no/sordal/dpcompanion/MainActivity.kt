@@ -308,7 +308,7 @@ private fun SessionEditor(session: DpSession, tour: Tour?, photos: List<Attachme
         }, modifier = Modifier.fillMaxWidth()) { Text("Save session") }
         TextButton(onClick = onClose) { Text("Back") }
         HorizontalDivider()
-        Text("Evidence", style = MaterialTheme.typography.titleMedium)
+        Text("Documentation", style = MaterialTheme.typography.titleMedium)
         OutlinedButton(onClick = { onPhoto("DP checklist") }) { Text("Photograph DP checklist") }
         OutlinedButton(onClick = { onPhoto("Signed logbook page") }) { Text("Photograph logbook page") }
         photos.forEach { a -> TextButton(onClick = { onOpenPhoto(a.fileName) }) { Text("${a.category} · ${a.fileName.take(8)}") } }
