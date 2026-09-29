@@ -94,4 +94,23 @@ class DpMathTest {
         assertNull(result.dpDays)
         assertEquals("Session outside tour dates",result.issue)
     }
+
+    @Test fun removingVesselKeepsHistoricalDpRecords() {
+        val vessel=Vessel(id="v1",name="Example Ship",imo="1234567",type="AHTS",dpClass="DP2")
+        val initial=AppData(vessels=listOf(vessel),preferredRank="Master",preferredCapacity="Senior DPO")
+        val t=initial.newTour(vessel).copy(id="t",signedOn="2026-09-29",disembarked="2026-10-26")
+        val s=DpSession(tourId=t.id,startMillis=time(29,0),endMillis=time(29,3))
+        val after=initial.copy(vessels=emptyList(),tours=listOf(t),sessions=listOf(s))
+        assertEquals("Missing vessel info",after.vesselName(t))
+        assertEquals(1,after.sessions.size)
+        assertEquals(1.0,DpMath.totals(t,after.sessions).dpDays!!,0.0001)
+        assertEquals("1234567",t.imo)
+        assertEquals("Master",t.rank)
+        assertEquals("Senior DPO",t.capacity)
+    }
+
+    @Test fun legacyTourStillDisplaysItsSavedVessel() {
+        val old=Tour(vessel="Original Vessel",imo="1234567")
+        assertEquals("Original Vessel",AppData().vesselName(old))
+    }
 }

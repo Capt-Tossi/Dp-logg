@@ -12,7 +12,13 @@ data class Tour(
     val dpClass: String = "DP2", val rank: String = "Master", val capacity: String = "Senior DPO / DP Master",
     val signedOn: String = "", val disembarked: String = "",
     val mode: String = "Short operations", val dutyHours: Double = 0.0,
-    val zoneId: String = ZoneId.systemDefault().id
+    val zoneId: String = ZoneId.systemDefault().id,
+    val vesselId: String = ""
+)
+
+data class Vessel(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String = "", val imo: String = "", val type: String = "PSV", val dpClass: String = "DP2"
 )
 
 data class DpSession(
@@ -24,13 +30,27 @@ data class DpSession(
 )
 
 data class Correction(val changedAtMillis: Long, val previousStartMillis: Long, val previousEndMillis: Long?, val reason: String)
-data class CpdEntry(val id: String = UUID.randomUUID().toString(), val title: String, val completedDate: String)
+data class CpdEntry(val id: String = UUID.randomUUID().toString(), val title: String, val completedDate: String, val kind: String = "CPD")
 data class Attachment(val id: String = UUID.randomUUID().toString(), val ownerId: String, val category: String, val fileName: String, val createdAtMillis: Long)
 data class AppData(
     val tours: List<Tour> = emptyList(), val sessions: List<DpSession> = emptyList(),
     val cpd: List<CpdEntry> = emptyList(), val attachments: List<Attachment> = emptyList(),
     val activeTourId: String? = null, val certificateNumber: String = "", val certificateExpiry: String = "",
-    val cpd6Completed: Boolean = true
+    val cpd6Completed: Boolean = true,
+    val vessels: List<Vessel> = emptyList(), val fullName: String = "", val lastName: String = "",
+    val preferredRank: String = "Master", val preferredCapacity: String = "Senior DPO / DP Master",
+    val certificateIssue: String = ""
+)
+
+fun AppData.vesselName(tour: Tour): String = when {
+    tour.vesselId.isBlank() -> tour.vessel.ifBlank { "Missing vessel info" } // Legacy tour from v0.1.
+    vessels.none { it.id == tour.vesselId } -> "Missing vessel info"
+    else -> tour.vessel.ifBlank { vessels.first { it.id == tour.vesselId }.name.ifBlank { "Missing vessel info" } }
+}
+
+fun AppData.newTour(vessel: Vessel): Tour = Tour(
+    vesselId = vessel.id, vessel = vessel.name, imo = vessel.imo, vesselType = vessel.type,
+    dpClass = vessel.dpClass, rank = preferredRank, capacity = preferredCapacity
 )
 
 data class TourTotals(val loggedHours: Int, val dpDays: Double?, val daysOnBoard: Long?, val issue: String?, val provisional: Boolean = false)
