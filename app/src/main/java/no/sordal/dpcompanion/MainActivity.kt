@@ -495,8 +495,19 @@ private fun ExportScreen(data: AppData, onClose: () -> Unit,
         }
         if (selected != null) {
             Text("${tours.size} service period(s) · IMO ${tours.first().imo}", style = MaterialTheme.typography.titleMedium)
-            ChoiceField("Layout", layout.title, ReportLayout.entries.map { it.title }) { label -> layout = ReportLayout.entries.first { it.title == label } }
+            ChoiceField("Export type", if (letter) "Confirmation letter" else layout.title,
+                listOf(ReportLayout.SUMMARY.title, ReportLayout.DETAILED.title, "Confirmation letter")) { label ->
+                layout = when (label) {
+                    "Confirmation letter" -> ReportLayout.NEW_SCHEME
+                    ReportLayout.DETAILED.title -> ReportLayout.DETAILED
+                    else -> ReportLayout.SUMMARY
+                }
+            }
             if (letter) {
+                ChoiceField("Letter layout", if (layout == ReportLayout.NEW_SCHEME) "NI New Scheme" else "IMCA logbook",
+                    listOf("NI New Scheme", "IMCA logbook")) { label ->
+                    layout = if (label == "NI New Scheme") ReportLayout.NEW_SCHEME else ReportLayout.IMCA
+                }
                 Text("Draft for employer verification. The company must check the figures and sign the letter.")
                 OutlinedTextField(company, { company = it }, label = { Text("Company name") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(address, { address = it }, label = { Text("Company address") }, modifier = Modifier.fillMaxWidth())
