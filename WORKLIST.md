@@ -18,6 +18,14 @@ Version 0.5.1 was authorized and built. Record later requests here until the nex
 
 - [ ] Use a consistent private signing key for future test builds so updates can install over the existing app without an uninstall and restore. Keep the key out of the public repository.
 
+## Feedback for the next update (not implemented)
+
+- [ ] Allow editing the vessel associated with an existing Sea Service period. Show the chosen vessel and its details before saving, including how the period's saved vessel snapshot will change. Keep that period's sessions and documentation attached to the period. Editing a vessel in My Vessels should not silently rewrite historical periods.
+- [ ] Allow deleting a Sea Service period with a confirmation that clearly states the effect on its sessions and attached photos. Do not delete the vessel from My Vessels or affect other periods. Make the action available from the selected period's detail view.
+- [ ] Improve the certificate renewal card: give the renewal state its own clearly phrased line inside the card, with the date labelled in plain English (for example, `You can apply for renewal from 29 Mar 2026` or `Renewal applications are open`). Do not show an ambiguous `Open` beside an unexplained date. Retain the expiry date and countdown.
+- [ ] Rename the first bottom navigation label from `DP` to two lines: `DP` / `Logg`. Check label and icon alignment on a narrow phone. Keep the rest of the app's English text as requested.
+- [ ] Make Android system Back return to the previous in-app view, especially from Review session to the prior DP session list, matching the visible Back button. Handle nested DPO pages, View all sessions, image viewer and other detail states before leaving the app; only allow exit from the top-level screen. Preserve unsaved edits or warn before discarding them when relevant.
+
 ## v0.5.1 work
 
 - [x] Continuous operating mode, `Watch period (hours)` input bug: the numeric keyboard stays active without an obvious Done/confirm action. Add a Done keyboard action that validates and saves the value, clears focus, and closes the keyboard; tapping outside should also dismiss it without losing a valid value. Keep an editable text draft while typing instead of converting every keystroke to Double and writing `0.0` for partial/invalid input (the current field does this), so decimals and corrections work. Show a clear inline validation message for empty/invalid/out-of-range values and test on the Android phone keyboard. Check other numeric entry fields for the same focus behavior.
