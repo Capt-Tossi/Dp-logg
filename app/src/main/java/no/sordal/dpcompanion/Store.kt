@@ -163,7 +163,8 @@ class Store(private val context: Context) {
         val activeTourId = if (j.isNull("activeTourId")) null else j.optString("activeTourId").ifBlank { null }
         return AppData(tours=tours,sessions=sessions,cpd=cpd,attachments=attachments,activeTourId=activeTourId,
             certificateNumber=j.optString("certificateNumber"),certificateExpiry=j.optString("certificateExpiry"),
-            cpd6Completed=j.optBoolean("cpd6Completed",false),vessels=vessels,
+            // v0.2 seeded this flag as true without user input; reset it on migration.
+            cpd6Completed=if (j.optInt("schema",1) < 3) false else j.optBoolean("cpd6Completed",false),vessels=vessels,
             fullName=j.optString("fullName"),lastName=j.optString("lastName"),
             preferredRank=j.optString("preferredRank","Master"),
             preferredCapacity=j.optString("preferredCapacity","Senior DPO / DP Master"),
