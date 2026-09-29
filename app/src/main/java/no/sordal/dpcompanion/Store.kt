@@ -126,7 +126,7 @@ class Store(private val context: Context) {
         }) } })
         put("attachments", JSONArray().apply { data.attachments.forEach { a -> put(JSONObject().apply {
             put("id",a.id); put("ownerId",a.ownerId); put("category",a.category)
-            put("fileName",a.fileName); put("createdAtMillis",a.createdAtMillis)
+            put("fileName",a.fileName); put("createdAtMillis",a.createdAtMillis); put("rotationDegrees",a.rotationDegrees)
         }) } })
     }
 
@@ -159,7 +159,7 @@ class Store(private val context: Context) {
         val cpd = j.optJSONArray("cpd").objects().map { c -> CpdEntry(c.optString("id"),c.optString("title"),c.optString("completedDate"),c.optString("kind","CPD")) }
         val attachments = j.optJSONArray("attachments").objects().map { a -> Attachment(
             a.optString("id"),a.optString("ownerId"),a.optString("category"),
-            a.optString("fileName"),a.optLong("createdAtMillis")
+            a.optString("fileName"),a.optLong("createdAtMillis"),a.optInt("rotationDegrees",0)
         ) }
         val activeTourId = if (j.isNull("activeTourId")) null else j.optString("activeTourId").ifBlank { null }
         return AppData(tours=tours,sessions=sessions,cpd=cpd,attachments=attachments,activeTourId=activeTourId,

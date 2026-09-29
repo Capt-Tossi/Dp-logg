@@ -33,7 +33,7 @@ data class DpSession(
 
 data class Correction(val changedAtMillis: Long, val previousStartMillis: Long, val previousEndMillis: Long?, val reason: String)
 data class CpdEntry(val id: String = UUID.randomUUID().toString(), val title: String, val completedDate: String, val kind: String = "CPD")
-data class Attachment(val id: String = UUID.randomUUID().toString(), val ownerId: String, val category: String, val fileName: String, val createdAtMillis: Long)
+data class Attachment(val id: String = UUID.randomUUID().toString(), val ownerId: String, val category: String, val fileName: String, val createdAtMillis: Long, val rotationDegrees: Int = 0)
 data class AppData(
     val tours: List<Tour> = emptyList(), val sessions: List<DpSession> = emptyList(),
     val cpd: List<CpdEntry> = emptyList(), val attachments: List<Attachment> = emptyList(),

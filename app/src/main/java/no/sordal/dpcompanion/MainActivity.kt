@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,7 +43,9 @@ import java.time.*
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.UUID
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -252,11 +253,13 @@ private fun HomeScreen(data: AppData, onStart: (Tour) -> Unit, onStop: (DpSessio
                 RecordStatus.OK -> Color(0xFFDDF3DF)
             }
             OutlinedCard(modifier = Modifier.fillMaxWidth().pointerInput(s.id) {
-                awaitEachGesture { awaitPointerEventScope {
-                    awaitFirstDown(requireUnconsumed = false)
-                    val up = withTimeoutOrNull(2000L) { waitForUpOrCancellation() }
-                    if (up != null) onEdit(s.id)
-                    else { selectedDelete = s.id; waitForUpOrCancellation()?.consume() }
+                coroutineScope { while (true) {
+                    awaitPointerEventScope { awaitFirstDown(requireUnconsumed = false) }
+                    var longPressed = false
+                    val timer = launch { delay(2000L); longPressed = true; selectedDelete = s.id }
+                    val up = awaitPointerEventScope { waitForUpOrCancellation() }
+                    timer.cancel()
+                    if (up != null) { if (longPressed) up.consume() else onEdit(s.id) }
                 } }
             }, colors = CardDefaults.outlinedCardColors(containerColor = tint)) {
                 Column(Modifier.padding(14.dp)) {
@@ -343,7 +346,7 @@ private fun OtherChoice(label: String, value: String, options: List<String>, onC
 private fun VesselThumbnail(data: AppData, vesselId: String, size: Int = 90) {
     val context = LocalContext.current
     val attachment = data.attachments.filter { it.ownerId == vesselId && it.category == "Vessel photo" }.maxByOrNull { it.createdAtMillis }
-    val bitmap = remember(attachment?.fileName) {
+    val bitmap = remember(attachment?.fileName, attachment?.rotationDegrees) {
         attachment?.let { a -> runCatching {
             val path = File(File(context.filesDir, "photos"), a.fileName).absolutePath
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -358,7 +361,7 @@ private fun VesselThumbnail(data: AppData, vesselId: String, size: Int = 90) {
                 ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(270f)
                 ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> postScale(-1f, 1f)
                 ExifInterface.ORIENTATION_FLIP_VERTICAL -> postScale(1f, -1f)
-            } }
+            }; postRotate(a.rotationDegrees.toFloat()) }
             decoded?.let { android.graphics.Bitmap.createBitmap(it, 0, 0, it.width, it.height, matrix, true).asImageBitmap() }
         }.getOrNull() }
     }
@@ -410,6 +413,7 @@ private fun VesselsScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (Stri
             }
             data.attachments.filter { it.ownerId == vessel.id && it.category == "Vessel photo" }.lastOrNull()?.let { a ->
                 TextButton(onClick = { onOpenPhoto(a.fileName) }) { Text("View vessel photo") }
+                TextButton(onClick = { save(data.copy(attachments = data.attachments.map { if (it.id == a.id) it.copy(rotationDegrees = (it.rotationDegrees + 90) % 360) else it })) }) { Text("Rotate thumbnail 90° clockwise") }
             }
             if (editing) TextButton(onClick = { confirmDelete = true }) { Text("Remove from My Vessels") }
         }
@@ -437,9 +441,11 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
             }
             Button(onClick = { chosen?.let { v -> val t = data.newTour(v); save(data.copy(tours = data.tours + t, activeTourId = t.id)) } }, enabled = chosen != null && chosen.name.isNotBlank()) { Text("Add service period") }
         }
-        data.tours.sortedWith(compareByDescending<Tour> { it.signedOn }.thenByDescending { it.id }).forEach { t ->
-            FilterChip(selected = t.id == data.activeTourId, onClick = { save(data.copy(activeTourId = t.id)) },
-                label = { Column { Text(data.vesselName(t)); Text("${t.signedOn.ifBlank { "Date missing" }} – ${t.disembarked.ifBlank { "Ongoing" }}", style = MaterialTheme.typography.labelSmall) } })
+        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+          data.tours.sortedWith(compareByDescending<Tour> { it.signedOn }.thenByDescending { it.id }).forEach { t ->
+              FilterChip(selected = t.id == data.activeTourId, onClick = { save(data.copy(activeTourId = t.id)) },
+                  label = { Column { Text(data.vesselName(t)); Text("${t.signedOn.ifBlank { "Date missing" }} – ${t.disembarked.ifBlank { "Ongoing" }}", style = MaterialTheme.typography.labelSmall) } })
+          }
         }
         if (tour != null) {
             fun change(t: Tour) { save(data.copy(tours = data.tours.map { if (it.id == tour.id) t else it })) }
