@@ -47,10 +47,10 @@ Version 0.5.2 updated only the launcher icon: the white ring was removed and the
 ## Next visual changes (requested 29 Sep 2026)
 
 - [ ] Show `DP Logg` on one centered line beneath the first bottom navigation icon, replacing the two-line label introduced in v0.5.3. Verify on a narrow phone and with larger system text.
-- [ ] Make START DP a green gradient control and STOP DP a matching red gradient control. Use the approved glossy, subtly beveled style with white stopwatch/stop symbols, equal dimensions, depth/shadow, and a brief pressed effect. Record timestamps immediately on tap.
-- [ ] Keep START DP and STOP DP at the exact same vertical position when recording starts. Reserve space for `Recording since` so the main control does not jump.
-- [ ] Give the header a dark-blue-to-clear-blue gradient matching the app icon, with centered white `DP Companion` in a clean bold sans-serif style.
-- [ ] Fix the launcher icon if the white circular background/ring still appears on the device. Use a full-blue adaptive icon with the DP artwork filling the icon safely, then verify on the device launcher.
+- [ ] Build START DP and STOP DP as scalable UI controls of identical size and shape: START has a green gradient, white stopwatch and `START DP`; STOP has a red gradient, white stop symbol/stopwatch and `STOP DP`. Give both subtle depth/shadow. On press, darken and depress the control slightly for a short animation before the next view appears; the animation must be a visual transform, not a layout shift. Timestamp immediately on tap and prevent duplicate taps.
+- [ ] Keep START DP and STOP DP at exactly the same fixed Y position in both directions. Reserve an empty area above the control when idle; when recording, show `Recording since 29 Sep 2026 16:28` (using the actual timestamp) in that area without moving the button. Verify START → STOP and STOP → START on a narrow phone.
+- [ ] Give the top header the app icon's dark-blue-to-clearer-blue gradient and discreet depth, without a glossy finish. Center high-contrast white `DP Companion` in a clean bold sans-serif style that visually matches the icon's DP lettering. Use blue as the app's primary visual profile, green for Start/OK, red for Stop/ending actions.
+- [ ] Replace the current square PNG launcher icon approach with an Android adaptive icon having separate background and foreground layers. Fill the entire masked background with the dark-blue gradient; place white `DP` and blue/cyan waves in a transparent foreground within Android's safe zone. No white circle/ring, separate blue square edge, or white background should remain. Verify circle/squircle masks on Pixel and another Android launcher if available.
 
 ## Remaining follow-up
 
