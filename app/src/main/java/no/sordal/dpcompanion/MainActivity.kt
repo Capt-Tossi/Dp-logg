@@ -309,8 +309,10 @@ private fun SessionEditor(session: DpSession, tour: Tour?, photos: List<Attachme
         TextButton(onClick = onClose) { Text("Back") }
         HorizontalDivider()
         Text("Documentation", style = MaterialTheme.typography.titleMedium)
-        OutlinedButton(onClick = { onPhoto("DP checklist") }) { Text("Photograph DP checklist") }
-        OutlinedButton(onClick = { onPhoto("Signed logbook page") }) { Text("Photograph logbook page") }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { onPhoto("DP checklist") }, modifier = Modifier.weight(1f)) { Text("Photo DP checklist", textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+            OutlinedButton(onClick = { onPhoto("Signed logbook page") }, modifier = Modifier.weight(1f)) { Text("Photo logbook page", textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+        }
         photos.forEach { a -> TextButton(onClick = { onOpenPhoto(a.fileName) }) { Text("${a.category} · ${a.fileName.take(8)}") } }
         if (session.corrections.isNotEmpty()) {
             HorizontalDivider(); Text("Time corrections", style = MaterialTheme.typography.titleMedium)
@@ -408,7 +410,7 @@ private fun VesselsScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (Stri
                 ChoiceField("DP class", vessel.dpClass, listOf("DP1", "DP2", "DP3", "Other")) { change(vessel.copy(dpClass = it)) }
                 OtherChoice("DP system", vessel.dpSystem, dpSystems) { change(vessel.copy(dpSystem = it)) }
                 OutlinedTextField(vessel.grossTonnage, { change(vessel.copy(grossTonnage = it)) }, label = { Text("Gross tonnage (GT)") }, modifier = Modifier.fillMaxWidth())
-                OutlinedButton(onClick = { onPhoto(vessel.id) }) { Text("Photograph vessel") }
+                OutlinedButton(onClick = { onPhoto(vessel.id) }) { Text("Photo vessel") }
                 Button(onClick = { editing = false }, enabled = vessel.name.isNotBlank()) { Text("Done") }
             }
             data.attachments.filter { it.ownerId == vessel.id && it.category == "Vessel photo" }.lastOrNull()?.let { a ->
@@ -475,7 +477,7 @@ private fun ToursScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String
             Text("${totals.loggedHours} logged hours · ${totals.dpDays?.formatDays() ?: if (totals.loggedHours == 0) "0" else "—"} DP days")
             if (totals.provisional) Text("Provisional until disembarked date is entered", style = MaterialTheme.typography.bodySmall)
             if (totals.issue != null) Text(totals.issue, color = MaterialTheme.colorScheme.error)
-            OutlinedButton(onClick = { onPhoto(tour.id) }) { Text("Photograph service checklist") }
+            OutlinedButton(onClick = { onPhoto(tour.id) }) { Text("Photo service checklist") }
             data.attachments.filter { it.ownerId == tour.id }.forEach { a -> TextButton(onClick = { onOpenPhoto(a.fileName) }) { Text(a.category) } }
         }
     }
@@ -503,7 +505,7 @@ private fun CpdScreen(data: AppData, save: (AppData) -> Unit, onPhoto: (String) 
         data.cpd.sortedByDescending { it.completedDate }.forEach { c ->
             OutlinedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp)) {
                 Text(c.title, fontWeight = FontWeight.SemiBold); Text("${c.kind} · ${c.completedDate}")
-                TextButton(onClick = { onPhoto(c.id) }) { Text("Photograph completion") }
+                TextButton(onClick = { onPhoto(c.id) }) { Text("Photo completion") }
                 data.attachments.filter { it.ownerId == c.id }.forEach { a -> TextButton(onClick = { onOpenPhoto(a.fileName) }) { Text("View ${a.category}") } }
             } }
         }
