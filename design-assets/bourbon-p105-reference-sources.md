@@ -40,4 +40,4 @@ Pearl was subsequently converted to MPSV and renamed Parcel Do Bandolim; prefer 
 - Three-quarter view, aft cargo deck, white forward superstructure, green hull and red underwater body.
 - No helideck or offshore crane in these Sapphire artwork drafts.
 - Two matching render variants: an unbranded vessel, and one with the large white Bourbon B on the green hull.
-- Existing reference concept: `bourbon-sapphire-p105-concept.png`. All concepts require the user's visual approval before app integration.
+- Existing reference concept: `bourbon-sapphire-p105-concept.webp`. All concepts require the user's visual approval before app integration.
