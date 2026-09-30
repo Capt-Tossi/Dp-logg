@@ -61,4 +61,12 @@ Version 0.5.2 updated only the launcher icon: the white ring was removed and the
 - [ ] Design and verify a separate Shuttle Tanker operation register and NI export using the applicable NI scheme; do not infer qualifying operations from individual DP sessions.
 - [ ] Complete the listed phone checks for camera orientation, backup restore and image replacement/deletion on a physical device.
 
+## Proposed photo and vessel-image changes (awaiting implementation decision)
+
+- [ ] Compress newly captured documentation photos before saving: apply EXIF orientation, downscale to a document-readable resolution (trial target 2400–3000 px longest edge), save JPEG at a tested quality setting, and compare fine print and stamps with the original on a phone. Keep a failed conversion from replacing or deleting the original captured file. Measure typical backup-size reduction and test photos from more than one camera. This must work for certificate, CPD, checklist, logbook, and vessel photos if vessel photos remain.
+- [ ] Make photo capture optional under Documentation; do not require a photo for a DP session or imply that a photo replaces an original signed logbook or company confirmation.
+- [ ] Consider removing user-supplied vessel photos, pending the owner's decision. If removed, preserve existing vessel-photo attachments in saved data and backups and provide access or export before any removal; do not silently delete them.
+- [ ] Consider a small offline built-in vessel image catalog as an optional “hidden gem”: exact 7-digit IMO lookup against a curated list supplied by the owner, show the bundled image when the IMO matches, otherwise show the ordinary fallback. Never fetch photos online or put bundled catalog images into user backup ZIPs. Verify images and any Bourbon name/logo usage are cleared for distribution before a commercial Play release. Decide whether a bundled illustration is intended as a generic depiction rather than an exact vessel photo.
+- [ ] Before wider testing, fix and exercise backup capacity: current import caps at 201 entries and 80 MB while export does not enforce the same limit. Confirm a large photo backup restores on a second installation and catches missing referenced photos before reporting success.
+
 Add each new request here with its intended behavior and status before implementation.
